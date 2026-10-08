@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, LayoutGrid, List, Loader2, RefreshCw, Search } from "lucide-react";
 import { useCurrentShift } from "@/hooks/useCurrentShift";
-import { useLiveMachines } from "@/hooks/useLiveMachines";
+import { dashboardStatus, useLiveMachines } from "@/hooks/useLiveMachines";
+import { useMachineLabel } from "@/lib/machine-label";
 import type { MachineStatus } from "@/types/oee";
 import SummaryCards from "./SummaryCards";
-import MachineCard, { OeeBar, oeeLabel, SkuImage, StatusPill } from "./MachineCard";
+import MachineCard, { OeeBar, oeeLabel, StatusPill } from "./MachineCard";
+import SkuImage from "./SkuImage";
 
 const fmt = new Intl.NumberFormat("en-US");
 
@@ -46,6 +48,7 @@ function Select({
 
 export default function Dashboard() {
   const { machines, error, connected, reload } = useLiveMachines();
+  const name = useMachineLabel();
   const shift = useCurrentShift();
   const [query, setQuery] = useState("");
   const [line, setLine] = useState("ALL");
@@ -66,7 +69,7 @@ export default function Dashboard() {
         ) : (
           <>
             <Loader2 size={22} className="animate-spin" />
-            Loading machines…
+            Loading {name.many.toLowerCase()}…
           </>
         )}
       </div>
@@ -80,7 +83,7 @@ export default function Dashboard() {
     if (q && !haystack.some((s) => s.toLowerCase().includes(q))) return false;
     if (line !== "ALL" && m.line !== line) return false;
     if (machineId !== "ALL" && m.id !== machineId) return false;
-    if (status !== "ALL" && (!m.isActive || m.status !== status)) return false;
+    if (status !== "ALL" && (!m.isActive || dashboardStatus(m.status) !== status)) return false;
     return true;
   });
 
@@ -95,7 +98,7 @@ export default function Dashboard() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search machine, SKU, or product..."
+            placeholder={`Search ${name.one.toLowerCase()}, SKU, or product...`}
             className={`${control} w-full pr-3 pl-9 placeholder:text-slate-400`}
           />
         </div>
@@ -107,11 +110,11 @@ export default function Dashboard() {
             options={[{ value: "ALL", label: "All Lines" }, ...lines.map((l) => ({ value: l, label: l }))]}
           />
           <Select
-            label="Machine"
+            label={name.one}
             value={machineId}
             onChange={setMachineId}
             options={[
-              { value: "ALL", label: "All Machines" },
+              { value: "ALL", label: `All ${name.many}` },
               ...machines.map((m) => ({ value: m.id, label: m.machineNo })),
             ]}
           />
@@ -132,7 +135,7 @@ export default function Dashboard() {
           onClick={reload}
           className={`${control} ml-auto flex w-10 items-center justify-center text-[#1E6FD9] hover:bg-slate-50`}
           aria-label="Refresh"
-          title="Reload machines"
+          title={`Reload ${name.many.toLowerCase()}`}
         >
           <RefreshCw size={18} />
         </button>
@@ -140,7 +143,7 @@ export default function Dashboard() {
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Machines ({filtered.length})</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{name.many} ({filtered.length})</h2>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
               connected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
@@ -182,7 +185,7 @@ export default function Dashboard() {
 
       {machines.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          No active machines registered yet.{" "}
+          No active {name.many.toLowerCase()} registered yet.{" "}
           <Link href="/settings/machines" className="font-medium text-[#1E6FD9] hover:underline">
             Register a machine
           </Link>
@@ -202,7 +205,7 @@ export default function Dashboard() {
           <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Machine</th>
+                <th className="px-4 py-2.5 font-medium">{name.one}</th>
                 <th className="px-4 py-2.5 font-medium">Line</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">SKU</th>
@@ -234,7 +237,7 @@ export default function Dashboard() {
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">{m.line}</td>
                   <td className="px-4 py-2.5">
-                    <StatusPill status={m.status} inactive={!m.isActive} />
+                    <StatusPill status={dashboardStatus(m.status)} inactive={!m.isActive} />
                   </td>
                   <td className="px-4 py-2.5">
                     {m.live ? (

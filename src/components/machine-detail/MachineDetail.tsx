@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { OEE_TARGET, oeeWaitLabels, statusStyles } from "@/config/oee";
-import { SkuImage, StatusPill } from "@/components/dashboard/MachineCard";
+import { ArrowLeft, Loader2, Package } from "lucide-react";
+import { OEE_TARGET, oeeWaitLabel, statusStyles } from "@/config/oee";
+import { StatusPill } from "@/components/dashboard/MachineCard";
+import SkuImage from "@/components/dashboard/SkuImage";
 import { useMachineDetail } from "@/hooks/useMachineDetail";
+import { useMachineLabel } from "@/lib/machine-label";
 import type { MachineHistory } from "@/types/oee";
 import OperationTimeline, { duration } from "./OperationTimeline";
 
@@ -183,6 +185,7 @@ function Logs({ history, showProduction }: { history: MachineHistory | null; sho
 
 export default function MachineDetail({ id }: { id: string }) {
   const { machine, error, live, monitoring, history, timeline, skus, connected, reload } = useMachineDetail(id);
+  const name = useMachineLabel();
 
   if (!machine) {
     return (
@@ -202,7 +205,7 @@ export default function MachineDetail({ id }: { id: string }) {
         ) : (
           <>
             <Loader2 size={22} className="animate-spin" />
-            Loading machine…
+            Loading {name.one.toLowerCase()}…
           </>
         )}
       </div>
@@ -267,7 +270,7 @@ export default function MachineDetail({ id }: { id: string }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Link
           href="/dashboard/machine"
-          aria-label="Back to machines"
+          aria-label={`Back to ${name.many.toLowerCase()}`}
           className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
         >
           <ArrowLeft size={18} />
@@ -309,7 +312,11 @@ export default function MachineDetail({ id }: { id: string }) {
               <Card>
                 <div className="flex items-center gap-4 p-4">
                   <div className="flex size-20 shrink-0 items-center justify-center rounded-lg bg-slate-50 p-1.5">
-                    <SkuImage sku={oee?.sku} className="h-full w-full" />
+                    {oee && oee.sku.code !== "-" ? (
+                      <SkuImage sku={oee.sku} className="h-full w-full" />
+                    ) : (
+                      <Package size={32} className="text-slate-300" aria-label="No active SKU" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500">Current product</p>
@@ -340,12 +347,17 @@ export default function MachineDetail({ id }: { id: string }) {
                     value={oee ? `${fmt.format(oee.output)} pcs` : "—"}
                     sub={oee ? `Ideal ${fmt.format(oee.idealOutput)} pcs` : undefined}
                   />
-                  <Stat label="Reject" value={oee ? `${fmt.format(oee.reject)} pcs` : "—"} tone="text-red-600" />
+                  <Stat
+                    label="Reject"
+                    value={oee ? `${fmt.format(oee.reject)} pcs` : "—"}
+                    sub={oee ? `Tag ${fmt.format(oee.rejectTag)} · Input ${fmt.format(oee.rejectInput)}` : undefined}
+                    tone="text-red-600"
+                  />
                   <Stat label="Uptime" value={oee ? duration(oee.uptimeSeconds) : "—"} tone="text-emerald-700" />
                   <Stat
-                    label="Stop (breakdown)"
+                    label="Stop / Breakdown"
                     value={oee ? duration(oee.stopSeconds) : "—"}
-                    sub={oee ? `${oee.stopCount}× stopped` : undefined}
+                    sub={oee ? `${oee.stopCount}× down` : undefined}
                     tone="text-amber-600"
                   />
                 </div>
@@ -359,9 +371,11 @@ export default function MachineDetail({ id }: { id: string }) {
                     : `Target ${OEE_TARGET}%`
                 }
               >
-                {oee?.waitingFor && (
+                {oee && oeeWaitLabel(oee) && (
                   <p className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-700">
-                    Not counting: {oeeWaitLabels[oee.waitingFor]}
+                    {oee.waitingFor === "RUN_FINISHED" && oee.finishedAt
+                      ? `Run finished at ${timeFmt.format(new Date(oee.finishedAt))}${oee.finishReason ? ` (${oee.finishReason})` : ""} – figures below are final; a new run starts when production resumes`
+                      : `Not counting: ${oeeWaitLabel(oee)}`}
                     {oee.waitingFor === "UNREGISTERED_SKU" && ` (${oee.sku.code}) – add it in SKU Management`}
                   </p>
                 )}

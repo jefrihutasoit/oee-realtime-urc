@@ -8,7 +8,7 @@ export interface PlacedMachine {
   y: number;
   /** Status colour of the lamp and floor ring. */
   color: string;
-  status: "RUN" | "STOP" | "OFF" | "NONE";
+  status: "RUN" | "STOP" | "OFF" | "BREAKDOWN" | "NONE";
   dim: boolean;
 }
 
@@ -471,7 +471,7 @@ export class PlantScene {
     const blink = Math.sin(time * 6) > 0;
     on(a.green, !dim && status === "RUN");
     on(a.amber, !dim && status === "STOP" && blink);
-    on(a.red, false);
+    on(a.red, !dim && status === "BREAKDOWN" && blink);
   }
 
   /** Keeps a machine's label on top while its card is open. */

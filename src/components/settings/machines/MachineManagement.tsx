@@ -241,12 +241,6 @@ export default function MachineManagement() {
                       checked={m.oeeEnabled}
                       onChange={(v) => handleToggle(m, "oeeEnabled", v)}
                     />
-                    {m.oeeEnabled && (
-                      <p className="mt-1 text-[11px] whitespace-nowrap text-slate-400">
-                        {m.oeeConfig.startMode === "sku" ? "Registered SKU" : "Always"} ·{" "}
-                        {m.oeeConfig.counterMode === "cumulative" ? "Cumulative" : "Direct"}
-                      </p>
-                    )}
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">

@@ -1,7 +1,8 @@
 import { Factory, Package, X } from "lucide-react";
 import { OEE_TARGET, statusStyles } from "@/config/oee";
-import type { LiveMachine } from "@/hooks/useLiveMachines";
-import type { MachineStatus } from "@/types/oee";
+import { dashboardStatus, type LiveMachine } from "@/hooks/useLiveMachines";
+import { useMachineLabel } from "@/lib/machine-label";
+import type { LiveStatus } from "@/types/oee";
 
 const fmt = new Intl.NumberFormat("en-US");
 
@@ -45,6 +46,7 @@ function OeeRing({ value }: { value: number }) {
 
 export default function SummaryCards({ machines }: { machines: LiveMachine[] }) {
   // Only active machines count. Status totals include status-only machines; OEE figures do not.
+  const name = useMachineLabel();
   const active = machines.filter((m) => m.isActive);
   const inactive = machines.length - active.length;
   const live = active.flatMap((m) => (m.live ? [m.live] : []));
@@ -53,7 +55,7 @@ export default function SummaryCards({ machines }: { machines: LiveMachine[] }) 
   const avgOee = counted.length ? counted.reduce((s, m) => s + m.oee, 0) / counted.length : 0;
   const output = live.reduce((s, m) => s + m.output, 0);
   const reject = live.reduce((s, m) => s + m.reject, 0);
-  const count = (st: MachineStatus) => active.filter((m) => m.status === st).length;
+  const count = (st: LiveStatus) => active.filter((m) => dashboardStatus(m.status) === st).length;
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.4fr_1.3fr_1.3fr_1.6fr]">
@@ -63,13 +65,13 @@ export default function SummaryCards({ machines }: { machines: LiveMachine[] }) 
         </span>
         <Metric
           value={String(active.length)}
-          label={inactive ? `Active Machines · ${inactive} inactive` : "Active Machines"}
+          label={inactive ? `Active ${name.many} · ${inactive} inactive` : `Active ${name.many}`}
         />
       </Card>
 
       <Card>
         <OeeRing value={avgOee} />
-        <Metric value={`${avgOee.toFixed(1)}%`} label={`OEE (${counted.length} machine${counted.length === 1 ? "" : "s"})`} />
+        <Metric value={`${avgOee.toFixed(1)}%`} label={`OEE (${counted.length} ${(counted.length === 1 ? name.one : name.many).toLowerCase()})`} />
         <div className="ml-auto border-l border-slate-200 pl-3 text-center">
           <p className="text-xs text-slate-500">Target</p>
           <p className="text-sm font-medium text-slate-700">{OEE_TARGET}%</p>

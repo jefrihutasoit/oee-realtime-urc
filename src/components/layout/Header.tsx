@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Bell, ChevronDown, Menu } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
+import UserMenu from "@/components/auth/UserMenu";
 
 // Snapshot is the current minute so the clock re-renders at most once per minute.
 const currentMinute = () => Math.floor(Date.now() / 60_000);
@@ -55,16 +56,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
         <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-red-500" />
       </button>
 
-      <button type="button" className="flex items-center gap-2.5 rounded-md py-1 pr-1 pl-1 hover:bg-slate-100">
-        <span className="flex size-9 items-center justify-center rounded-full bg-[#1E3A5F] text-sm font-medium text-white">
-          A
-        </span>
-        <span className="hidden text-left md:block">
-          <span className="block text-sm leading-tight font-medium text-slate-900">Admin</span>
-          <span className="block text-xs text-slate-500">Administrator</span>
-        </span>
-        <ChevronDown size={16} className="hidden text-slate-500 md:block" />
-      </button>
+      <UserMenu />
     </header>
   );
 }

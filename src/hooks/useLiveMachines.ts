@@ -5,7 +5,7 @@ import { apiGet } from "@/lib/api";
 import { machineApi } from "@/lib/machine-api";
 import { getSocket } from "@/lib/socket";
 import type { MachineRegistration } from "@/types/machine";
-import type { MachineOee, MachineStatus } from "@/types/oee";
+import type { LiveStatus, MachineOee } from "@/types/oee";
 
 /**
  * A registered machine with its live data. Inactive machines are included (shown disabled) but have
@@ -18,9 +18,12 @@ export interface LiveMachine {
   line: string;
   isActive: boolean;
   oeeEnabled: boolean;
-  status: MachineStatus | null;
+  status: LiveStatus | null;
   live: MachineOee | null;
 }
+
+/** Status for the machine dashboard, which has no Breakdown: a breakdown is the Off of the status tag. */
+export const dashboardStatus = (status: LiveStatus | null) => (status === "BREAKDOWN" ? "OFF" : status);
 
 const toMap = (list: MachineOee[]) => new Map(list.map((o) => [o.machineId, o]));
 

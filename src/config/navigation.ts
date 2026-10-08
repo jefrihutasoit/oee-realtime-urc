@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   ClipboardPen,
+  Timer,
   FileText,
   ChartLine,
   Boxes,
@@ -27,11 +28,25 @@ export const navigation: NavItem[] = [
     label: "Dashboard",
     icon: LayoutDashboard,
     children: [
+      { label: "Summary", href: "/dashboard/summary" },
       { label: "Machine", href: "/dashboard/machine" },
       { label: "Layout", href: "/dashboard/layout" },
     ],
   },
-  { label: "Reject Input", icon: ClipboardPen, href: "/reject-input" },
+  {
+    label: "Reject Input",
+    icon: ClipboardPen,
+    children: [
+      { label: "Upload", href: "/reject/upload" },
+      { label: "Manual Input", href: "/reject/manual" },
+      { label: "Reject Types", href: "/reject/types" },
+    ],
+  },
+  {
+    label: "Downtime Input",
+    icon: Timer,
+    children: [{ label: "Upload", href: "/downtime/upload" }],
+  },
   { label: "Reports", icon: FileText, href: "/reports" },
   { label: "Historical", icon: ChartLine, href: "/historical" },
   { label: "SKU Management", icon: Boxes, href: "/sku" },
@@ -45,6 +60,9 @@ export const navigation: NavItem[] = [
       { label: "Shift Management", href: "/settings/shifts" },
       { label: "Layout Mapping", href: "/settings/layout" },
       { label: "Status Definition", href: "/settings/status-definition" },
+      { label: "OEE Calculation", href: "/settings/oee" },
+      { label: "Backup & Restore", href: "/settings/backup" },
+      { label: "Database", href: "/settings/database" },
     ],
   },
 ];

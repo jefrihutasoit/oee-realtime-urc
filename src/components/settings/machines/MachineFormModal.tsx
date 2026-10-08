@@ -5,14 +5,7 @@ import { ImagePlus, Loader2, Plus, Trash2 } from "lucide-react";
 import Modal, { buttonStyles } from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
 import { fileToResizedDataUrl } from "@/lib/image";
-import {
-  DEFAULT_OEE_CONFIG,
-  type GatewayTag,
-  type MachineInput,
-  type MachineRegistration,
-  type OeeConfig,
-  type ProductionTagKey,
-} from "@/types/machine";
+import type { GatewayTag, MachineInput, MachineRegistration, ProductionTagKey } from "@/types/machine";
 
 interface MachineFormModalProps {
   machine?: MachineRegistration;
@@ -39,40 +32,6 @@ const productionTags: { key: ProductionTagKey; label: string; hint: string }[] =
 ];
 
 let rowSeq = 0;
-
-/** Radio group shown as selectable cards. */
-function ChoiceGroup<T extends string>({ name, value, onChange, options }: {
-  name: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string; hint: string }[];
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {options.map((o) => (
-        <label
-          key={o.value}
-          className={`flex cursor-pointer gap-2.5 rounded-lg border px-3 py-2.5 ${
-            value === o.value ? "border-[#1E6FD9] bg-blue-50/60" : "border-slate-200 hover:border-slate-300"
-          }`}
-        >
-          <input
-            type="radio"
-            name={name}
-            value={o.value}
-            checked={value === o.value}
-            onChange={() => onChange(o.value)}
-            className="mt-0.5 accent-[#1E6FD9]"
-          />
-          <span>
-            <span className="block text-sm font-medium text-slate-800">{o.label}</span>
-            <span className="block text-xs text-slate-500">{o.hint}</span>
-          </span>
-        </label>
-      ))}
-    </div>
-  );
-}
 
 function Section({ title, description, action, children }: {
   title: string;
@@ -136,7 +95,6 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
     photo: machine?.photo ?? null,
     isActive: machine?.isActive ?? true,
     oeeEnabled: machine?.oeeEnabled ?? true,
-    oeeConfig: machine?.oeeConfig ?? DEFAULT_OEE_CONFIG,
   });
   const [rows, setRows] = useState<MonitoringRow[]>(
     () => machine?.monitoringTags.map((t) => ({ key: ++rowSeq, ...t })) ?? []
@@ -148,9 +106,6 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
 
   const set = <K extends keyof GeneralFields>(key: K, value: GeneralFields[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
-
-  const setConfig = <K extends keyof OeeConfig>(key: K, value: OeeConfig[K]) =>
-    setForm((f) => ({ ...f, oeeConfig: { ...f.oeeConfig, [key]: value } }));
 
   const updateRow = (key: number, patch: Partial<MonitoringRow>) =>
     setRows((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -316,86 +271,6 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
             ))}
           </div>
         </Section>
-
-        {form.oeeEnabled && (
-          <Section
-            title="OEE Calculation"
-            description="Rules for this machine. Changing them starts a new OEE calculation."
-          >
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium text-slate-700">Start counting</p>
-                <ChoiceGroup
-                  name="startMode"
-                  value={form.oeeConfig.startMode}
-                  onChange={(v) => setConfig("startMode", v)}
-                  options={[
-                    {
-                      value: "sku",
-                      label: "When a registered SKU runs",
-                      hint: "Product tag must hold a SKU ID from SKU Management.",
-                    },
-                    {
-                      value: "always",
-                      label: "Always",
-                      hint: "Counts without a SKU; unknown SKUs use the default ideal rate.",
-                    },
-                  ]}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium text-slate-700">Output & reject tags</p>
-                <ChoiceGroup
-                  name="counterMode"
-                  value={form.oeeConfig.counterMode}
-                  onChange={(v) => setConfig("counterMode", v)}
-                  options={[
-                    {
-                      value: "cumulative",
-                      label: "Cumulative counter",
-                      hint: "Tag keeps increasing; OEE counts the increase since the calculation started.",
-                    },
-                    {
-                      value: "direct",
-                      label: "Direct total",
-                      hint: "Tag value is the total as pushed (the PLC resets it).",
-                    },
-                  ]}
-                />
-              </div>
-
-              <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between gap-4 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">Restart OEE when SKU changes</p>
-                    <p className="text-xs text-slate-500">
-                      A new SKU starts a fresh calculation. Only checked while the machine is not Off.
-                    </p>
-                  </div>
-                  <Toggle
-                    label="Restart OEE when SKU changes"
-                    checked={form.oeeConfig.resetOnSkuChange}
-                    onChange={(v) => setConfig("resetOnSkuChange", v)}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-4 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">Pause while machine is Off</p>
-                    <p className="text-xs text-slate-500">
-                      Off time is not counted. When disabled, Off counts as downtime in Availability.
-                    </p>
-                  </div>
-                  <Toggle
-                    label="Pause while machine is Off"
-                    checked={form.oeeConfig.pauseWhenOff}
-                    onChange={(v) => setConfig("pauseWhenOff", v)}
-                  />
-                </div>
-              </div>
-            </div>
-          </Section>
-        )}
 
         <Section
           title={`Realtime Monitoring Tags (${rows.length})`}
