@@ -16,7 +16,7 @@ interface UserFormModalProps {
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none disabled:bg-slate-50";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none disabled:bg-slate-50";
 
 export default function UserFormModal({ user, isSelf, onClose, onSubmit }: UserFormModalProps) {
   const [name, setName] = useState(user?.name ?? "");

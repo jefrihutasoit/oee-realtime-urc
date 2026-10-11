@@ -85,7 +85,7 @@ export default function RejectTypeManagement() {
 
       {loadError && <p className="text-sm text-red-600">{loadError}</p>}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
         <table className="w-full min-w-[480px] text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr>
@@ -117,7 +117,7 @@ export default function RejectTypeManagement() {
                       <button
                         type="button"
                         onClick={() => setForm({ mode: "edit", rejectType: t })}
-                        className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+                        className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
                         aria-label={`Edit ${t.name}`}
                       >
                         <Pencil size={16} />
@@ -185,7 +185,7 @@ export default function RejectTypeManagement() {
       {toast && (
         <div
           role="status"
-          className="fixed right-4 bottom-4 z-50 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
+          className="fixed right-4 bottom-4 z-50 theme-fixed rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
         >
           {toast}
         </div>

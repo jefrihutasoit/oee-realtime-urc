@@ -30,7 +30,7 @@ function NavGroup({ item, pathname, collapsed }: { item: NavItem; pathname: stri
         href={href}
         title={collapsed ? item.label : undefined}
         className={`${base} ${collapsed ? "justify-center" : ""} ${
-          active ? "bg-[#1E6FD9] text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
+          active ? "bg-(--brand) text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
         }`}
       >
         <Icon size={18} className="shrink-0" />
@@ -108,7 +108,7 @@ export default function Sidebar({ collapsed, mobileOpen, onClose }: SidebarProps
       {mobileOpen && <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onClose} />}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-[#0E1B2C] transition-[transform,width] motion-reduce:transition-none md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 theme-fixed flex w-60 flex-col bg-[#0E1B2C] transition-[transform,width] motion-reduce:transition-none md:static md:translate-x-0 ${
           collapsed ? "md:w-[72px]" : ""
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >

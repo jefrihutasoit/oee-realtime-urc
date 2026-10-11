@@ -25,7 +25,7 @@ interface Line {
 }
 
 const fieldCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400";
 const labelCls = "block text-sm font-medium text-slate-700";
 
 const DAY_NAMES = ["Today", "Yesterday"];
@@ -172,7 +172,7 @@ export default function ManualRejectForm({ shifts, initial, onSaved, onCancel }:
   const shift = shifts.find((s) => s.id === shiftId);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-slate-900">{initial ? "Edit Reject Data" : "Manual Input"}</h3>

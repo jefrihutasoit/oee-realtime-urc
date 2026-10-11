@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Cpu, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Cpu, Loader2, Pencil, Plus, RadioTower, Ruler, Search, Trash2 } from "lucide-react";
 import Modal, { buttonStyles } from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
-import { machineApi } from "@/lib/machine-api";
+import { machineApi, type MachineBulkInput } from "@/lib/machine-api";
+import { applyMachineUnits } from "@/lib/production-units";
 import type { GatewayTag, MachineInput, MachineRegistration } from "@/types/machine";
 import MachineFormModal from "./MachineFormModal";
+import MachineUnitsModal from "./MachineUnitsModal";
+import MachineRealtimeModal from "./MachineRealtimeModal";
+import { gatewayApi, machineTopic } from "@/lib/gateway-api";
+import { ttlLabel } from "@/lib/realtime-mode";
 
 type FormState = { mode: "create" } | { mode: "edit"; machine: MachineRegistration } | null;
 
@@ -17,6 +22,9 @@ export default function MachineManagement() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<FormState>(null);
+  const [bulk, setBulk] = useState<"units" | "realtime" | null>(null);
+  /** MQTT topic filter, for the topic example; null when the gateway settings cannot be read. */
+  const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<MachineRegistration | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const [toast, setToast] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
@@ -43,6 +51,26 @@ export default function MachineManagement() {
     load();
     return () => clearTimeout(toastTimer.current);
   }, []);
+
+  // Keeps the units shown on the dashboards in step with edits made here.
+  useEffect(() => {
+    if (!loading && !loadError) applyMachineUnits(machines);
+  }, [machines, loading, loadError]);
+
+  useEffect(() => {
+    gatewayApi
+      .getSettings()
+      .then((s) => setTopicFilter(s.mqtt.topic))
+      .catch(() => {});
+  }, []);
+
+  async function handleBulk(input: MachineBulkInput) {
+    const { updated } = await machineApi.bulkUpdate(input);
+    setMachines(await machineApi.list());
+    setBulk(null);
+    const what = input.realtimeMode ? "Realtime tag mode" : "Units";
+    showToast(`${what} applied to ${updated} ${updated === 1 ? "machine" : "machines"}`);
+  }
 
   async function handleSubmit(input: MachineInput) {
     if (form?.mode === "edit") {
@@ -107,10 +135,30 @@ export default function MachineManagement() {
           <h2 className="text-xl font-semibold text-slate-900">Machine Management</h2>
           <p className="text-sm text-slate-500">Register packaging machines and map their status tag from the gateway.</p>
         </div>
-        <button type="button" onClick={() => setForm({ mode: "create" })} className={buttonStyles.primary}>
-          <Plus size={16} />
-          Add Machine
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setBulk("units")}
+            disabled={machines.length === 0}
+            className={buttonStyles.secondary}
+          >
+            <Ruler size={16} />
+            Set Units
+          </button>
+          <button
+            type="button"
+            onClick={() => setBulk("realtime")}
+            disabled={machines.length === 0}
+            className={buttonStyles.secondary}
+          >
+            <RadioTower size={16} />
+            Realtime Tags
+          </button>
+          <button type="button" onClick={() => setForm({ mode: "create" })} className={buttonStyles.primary}>
+            <Plus size={16} />
+            Add Machine
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -121,7 +169,7 @@ export default function MachineManagement() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search machine no, name, or tag..."
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white pr-3 pl-9 text-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-surface pr-3 pl-9 text-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none"
           />
         </div>
         <p className="text-sm text-slate-500">
@@ -130,7 +178,7 @@ export default function MachineManagement() {
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
         <table className="w-full min-w-[980px] text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr>
@@ -162,7 +210,7 @@ export default function MachineManagement() {
                       setLoading(true);
                       load();
                     }}
-                    className="ml-2 font-medium text-[#1E6FD9] hover:underline"
+                    className="ml-2 font-medium text-(--brand) hover:underline"
                   >
                     Retry
                   </button>
@@ -205,28 +253,44 @@ export default function MachineManagement() {
                     <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
                       {(
                         [
-                          ["Status", m.tagStatus],
-                          ["Output", m.tagOutput],
-                          ["Reject", m.tagReject],
-                          ["Product", m.tagProduct],
+                          ["Status", m.tagStatus, null],
+                          ["Output", m.tagOutput, m.outputUnit],
+                          ["Reject", m.tagReject, m.rejectUnit],
+                          ["Product", m.tagProduct, null],
                         ] as const
-                      ).map(([label, tag]) => (
+                      ).map(([label, tag, unit]) => (
                         <div key={label} className="contents">
                           <dt className="text-slate-500">{label}</dt>
-                          <dd className={`font-mono ${m.isActive ? "text-slate-700" : "text-slate-400"}`}>{tag}</dd>
+                          <dd className={`font-mono ${m.isActive ? "text-slate-700" : "text-slate-400"}`}>
+                            {tag}
+                            {unit !== null && (
+                              <span className="ml-1.5 font-sans text-slate-400">· {unit || "no unit"}</span>
+                            )}
+                          </dd>
                         </div>
                       ))}
                     </dl>
                   </td>
                   <td className="px-4 py-2">
-                    <span
-                      title={m.monitoringTags.map((t) => `${t.name}: ${t.tagName}`).join("\n") || undefined}
-                      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
-                        m.isActive ? "bg-blue-50 text-[#1E6FD9]" : "bg-slate-100 text-slate-400"
-                      }`}
-                    >
-                      {m.monitoringTags.length} {m.monitoringTags.length === 1 ? "tag" : "tags"}
-                    </span>
+                    {m.realtimeMode === "adaptive" ? (
+                      <span
+                        title={`Tags from MQTT${topicFilter ? ` topic ${machineTopic(topicFilter, m.machineNo)}` : ""}; removed after ${ttlLabel(m.adaptiveTtlMinutes)} without updates`}
+                        className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+                          m.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        Adaptive
+                      </span>
+                    ) : (
+                      <span
+                        title={m.monitoringTags.map((t) => `${t.name}: ${t.tagName}`).join("\n") || undefined}
+                        className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+                          m.isActive ? "bg-blue-50 text-(--brand)" : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        {m.monitoringTags.length} {m.monitoringTags.length === 1 ? "tag" : "tags"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     <Toggle
@@ -247,7 +311,7 @@ export default function MachineManagement() {
                       <button
                         type="button"
                         onClick={() => setForm({ mode: "edit", machine: m })}
-                        className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+                        className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
                         aria-label={`Edit machine ${m.machineNo}`}
                       >
                         <Pencil size={16} />
@@ -276,6 +340,16 @@ export default function MachineManagement() {
           tags={tags}
           onClose={() => setForm(null)}
           onSubmit={handleSubmit}
+        />
+      )}
+
+      {bulk === "units" && <MachineUnitsModal machines={machines} onClose={() => setBulk(null)} onSubmit={handleBulk} />}
+      {bulk === "realtime" && (
+        <MachineRealtimeModal
+          machines={machines}
+          topicExample={topicFilter && machines[0] ? machineTopic(topicFilter, machines[0].machineNo) : null}
+          onClose={() => setBulk(null)}
+          onSubmit={handleBulk}
         />
       )}
 
@@ -312,7 +386,7 @@ export default function MachineManagement() {
         <div
           role="status"
           className={`fixed right-4 bottom-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
-            toast.tone === "ok" ? "bg-slate-900" : "bg-red-600"
+            toast.tone === "ok" ? "theme-fixed bg-slate-900" : "bg-red-600"
           }`}
         >
           {toast.text}

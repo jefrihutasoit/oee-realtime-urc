@@ -27,7 +27,7 @@ function NoticeBox({ notice }: { notice: Notice }) {
 
 function Card({ icon, title, sub, children }: { icon: React.ReactNode; title: string; sub: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
       <div className="flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{icon}</span>
         <div>
@@ -201,7 +201,7 @@ export default function DatabaseMaintenance() {
   const previewTotal = preview?.items.reduce((s, i) => s + i.rows, 0) ?? 0;
   const totalRows = stats?.tables.reduce((s, t) => s + t.rows, 0) ?? 0;
   const totalBytes = stats?.tables.reduce((s, t) => s + t.bytes, 0) ?? 0;
-  const inputCls = "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none";
+  const inputCls = "h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none";
 
   return (
     <div className="space-y-4">
@@ -319,7 +319,7 @@ export default function DatabaseMaintenance() {
 
           <Card icon={<RotateCcw size={18} />} title="Initialize Database" sub="Empties the database like a new install: no machines, SKUs or history; default shifts and settings.">
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={keepUsers} onChange={(e) => setKeepUsers(e.target.checked)} className="size-4 accent-[#1E6FD9]" />
+              <input type="checkbox" checked={keepUsers} onChange={(e) => setKeepUsers(e.target.checked)} className="size-4 accent-(--brand)" />
               Keep user accounts and role permissions
             </label>
             {!keepUsers && (

@@ -13,8 +13,18 @@ import SkuImage from "./SkuImage";
 
 const fmt = new Intl.NumberFormat("en-US");
 
+/** A count with its unit in smaller grey text. */
+function Qty({ value, unit }: { value: number; unit: string }) {
+  return (
+    <>
+      {fmt.format(value)}
+      {unit && <span className="ml-1 text-xs text-slate-400">{unit}</span>}
+    </>
+  );
+}
+
 const control =
-  "h-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:border-blue-400 focus:outline-none";
+  "h-10 rounded-lg border border-slate-200 bg-surface text-sm text-slate-700 focus:border-blue-400 focus:outline-none";
 
 function Select({
   value,
@@ -62,7 +72,7 @@ export default function Dashboard() {
         {error ? (
           <>
             <p className="text-red-600">{error}</p>
-            <button type="button" onClick={reload} className="font-medium text-[#1E6FD9] hover:underline">
+            <button type="button" onClick={reload} className="font-medium text-(--brand) hover:underline">
               Retry
             </button>
           </>
@@ -133,7 +143,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={reload}
-          className={`${control} ml-auto flex w-10 items-center justify-center text-[#1E6FD9] hover:bg-slate-50`}
+          className={`${control} ml-auto flex w-10 items-center justify-center text-(--brand) hover:bg-slate-50`}
           aria-label="Refresh"
           title={`Reload ${name.many.toLowerCase()}`}
         >
@@ -155,14 +165,14 @@ export default function Dashboard() {
           </span>
           {shift && (
             <span
-              className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1E6FD9] sm:inline"
+              className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-(--brand) sm:inline"
               title="Current shift – OEE figures are for this shift"
             >
               {shift.name} · {shift.startLabel}–{shift.endLabel}
             </span>
           )}
         </div>
-        <div className="flex gap-1 rounded-lg bg-white p-1 ring-1 ring-slate-200">
+        <div className="flex gap-1 rounded-lg bg-surface p-1 ring-1 ring-slate-200">
           {(
             [
               ["grid", LayoutGrid, "Grid view"],
@@ -175,7 +185,7 @@ export default function Dashboard() {
               onClick={() => setView(v)}
               aria-label={label}
               aria-pressed={view === v}
-              className={`rounded-md p-1.5 ${view === v ? "bg-blue-50 text-[#1E6FD9]" : "text-slate-500 hover:bg-slate-100"}`}
+              className={`rounded-md p-1.5 ${view === v ? "bg-blue-50 text-(--brand)" : "text-slate-500 hover:bg-slate-100"}`}
             >
               <Icon size={18} />
             </button>
@@ -184,14 +194,14 @@ export default function Dashboard() {
       </div>
 
       {machines.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-slate-300 bg-surface p-8 text-center text-sm text-slate-500">
           No active {name.many.toLowerCase()} registered yet.{" "}
-          <Link href="/settings/machines" className="font-medium text-[#1E6FD9] hover:underline">
+          <Link href="/settings/machines" className="font-medium text-(--brand) hover:underline">
             Register a machine
           </Link>
         </div>
       ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+        <p className="rounded-xl border border-dashed border-slate-300 bg-surface p-8 text-center text-sm text-slate-500">
           No machines match the current filters.
         </p>
       ) : view === "grid" ? (
@@ -201,7 +211,7 @@ export default function Dashboard() {
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
@@ -226,7 +236,7 @@ export default function Dashboard() {
                     {m.isActive ? (
                       <Link
                         href={`/dashboard/machine/${encodeURIComponent(m.id)}`}
-                        className="font-semibold text-slate-900 hover:text-[#1E6FD9] hover:underline"
+                        className="font-semibold text-slate-900 hover:text-(--brand) hover:underline"
                       >
                         {m.machineNo}
                       </Link>
@@ -264,8 +274,12 @@ export default function Dashboard() {
                       ? `${m.live.availability.toFixed(1)} / ${m.live.performance.toFixed(1)} / ${m.live.quality.toFixed(1)}`
                       : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-slate-700">{m.live ? fmt.format(m.live.output) : "—"}</td>
-                  <td className="px-4 py-2.5 text-right text-red-600">{m.live ? fmt.format(m.live.reject) : "—"}</td>
+                  <td className="px-4 py-2.5 text-right text-slate-700">
+                    {m.live ? <Qty value={m.live.output} unit={m.outputUnit} /> : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-red-600">
+                    {m.live ? <Qty value={m.live.reject} unit={m.rejectUnit} /> : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

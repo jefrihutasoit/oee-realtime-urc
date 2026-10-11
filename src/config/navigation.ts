@@ -57,12 +57,12 @@ export const navigation: NavItem[] = [
     icon: Settings,
     children: [
       { label: "Machine Management", href: "/settings/machines" },
+      { label: "Gateway", href: "/settings/gateway" },
       { label: "Shift Management", href: "/settings/shifts" },
       { label: "Layout Mapping", href: "/settings/layout" },
       { label: "Status Definition", href: "/settings/status-definition" },
       { label: "OEE Calculation", href: "/settings/oee" },
-      { label: "Backup & Restore", href: "/settings/backup" },
-      { label: "Database", href: "/settings/database" },
+      { label: "System Management", href: "/settings/system" },
     ],
   },
 ];

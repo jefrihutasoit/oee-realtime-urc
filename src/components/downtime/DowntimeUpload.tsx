@@ -11,7 +11,7 @@ import type { DowntimeUploadInput, DowntimeValidation } from "@/types/downtime";
 import DowntimeTable from "./DowntimeTable";
 
 const inputClass =
-  "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none";
+  "h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none";
 
 /** Upload of the downtime sheet (only the machine of each row is checked) and the uploaded data per date. */
 export default function DowntimeUpload() {
@@ -138,7 +138,7 @@ export default function DowntimeUpload() {
               key={d}
               type="button"
               onClick={() => setTableDate(d)}
-              className="font-medium text-[#1E6FD9] hover:underline"
+              className="font-medium text-(--brand) hover:underline"
             >
               Show {d}
             </button>
@@ -146,7 +146,7 @@ export default function DowntimeUpload() {
         </div>
       )}
 
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-surface p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold text-slate-900">Downtime Sheet</h3>
@@ -316,7 +316,7 @@ export default function DowntimeUpload() {
                             title={isIgnored ? "Include this row again" : "Ignore this row"}
                             aria-label={isIgnored ? `Include row ${r.rowNumber}` : `Ignore row ${r.rowNumber}`}
                             className={`rounded-md p-1.5 ${
-                              isIgnored ? "text-[#1E6FD9] hover:bg-blue-50" : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              isIgnored ? "text-(--brand) hover:bg-blue-50" : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                             }`}
                           >
                             {isIgnored ? <Undo2 size={16} /> : <X size={16} />}

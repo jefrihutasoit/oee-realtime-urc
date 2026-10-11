@@ -1,1 +1,103 @@
 @import "tailwindcss";
+
+/*
+ * Theme (System Management → Theme). <html data-theme="light|dark" data-accent="blue|…">.
+ * Components use Tailwind's palette; the dark theme remaps the palette variables, so no component needs
+ * its own dark classes. Brand colors come from --brand / --brand-hover / --brand-ink.
+ */
+
+@theme {
+  --color-surface: #ffffff;
+}
+
+:root {
+  --app-bg: #f3f6fa;
+  --brand: #1e6fd9;
+  --brand-hover: #185db8;
+  --brand-ink: #1e3a5f;
+  color-scheme: light;
+}
+
+:root[data-accent="teal"] {
+  --brand: #0f9d8a;
+  --brand-hover: #0b7f70;
+  --brand-ink: #134e4a;
+}
+:root[data-accent="indigo"] {
+  --brand: #4f46e5;
+  --brand-hover: #4338ca;
+  --brand-ink: #312e81;
+}
+:root[data-accent="green"] {
+  --brand: #16a34a;
+  --brand-hover: #15803d;
+  --brand-ink: #14532d;
+}
+:root[data-accent="red"] {
+  --brand: #e4002b;
+  --brand-hover: #be0024;
+  --brand-ink: #7f1d1d;
+}
+:root[data-accent="orange"] {
+  --brand: #ea580c;
+  --brand-hover: #c2410c;
+  --brand-ink: #7c2d12;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: #0b1220;
+  --brand-ink: #cbd5e1;
+  --color-surface: #111a2b;
+
+  /* Slate runs the other way: light text on dark surfaces. */
+  --color-slate-50: #162033;
+  --color-slate-100: #1c2840;
+  --color-slate-200: #283651;
+  --color-slate-300: #364566;
+  --color-slate-400: #6b7a94;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #a9b6c9;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  --color-slate-950: #f8fafc;
+
+  /* Tinted backgrounds become dark tints; their text gets lighter. */
+  --color-red-50: rgb(127 29 29 / 0.3);
+  --color-red-100: rgb(127 29 29 / 0.45);
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-emerald-50: rgb(6 78 59 / 0.35);
+  --color-emerald-100: rgb(6 78 59 / 0.5);
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-amber-50: rgb(120 53 15 / 0.3);
+  --color-amber-100: rgb(120 53 15 / 0.45);
+  --color-amber-200: rgb(146 64 14 / 0.6);
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-blue-50: rgb(30 58 138 / 0.3);
+  --color-blue-100: rgb(30 58 138 / 0.45);
+  --color-blue-200: rgb(30 64 175 / 0.6);
+  --color-blue-700: #93c5fd;
+  --color-blue-800: #bfdbfe;
+}
+
+/* Parts that are dark in both themes (sidebar, login, toasts, tooltips, consoles) keep the normal palette. */
+:root[data-theme="dark"] .theme-fixed {
+  --color-surface: #ffffff;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+}

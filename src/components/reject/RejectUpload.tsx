@@ -35,7 +35,7 @@ function matchShift(raw: string | null, shifts: Shift[]) {
 }
 
 const inputClass =
-  "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none";
+  "h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none";
 
 export default function RejectUpload({ shifts, onUploaded }: RejectUploadProps) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -167,7 +167,7 @@ export default function RejectUpload({ shifts, onUploaded }: RejectUploadProps) 
   const newTypes = new Set(validation?.newRejectTypes.map((t) => t.toLowerCase()) ?? []);
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-slate-900">Upload Reject Sheet</h3>
@@ -405,7 +405,7 @@ export default function RejectUpload({ shifts, onUploaded }: RejectUploadProps) 
                           aria-label={isIgnored ? `Include row ${r.rowNumber}` : `Ignore row ${r.rowNumber}`}
                           className={`rounded-md p-1.5 ${
                             isIgnored
-                              ? "text-[#1E6FD9] hover:bg-blue-50"
+                              ? "text-(--brand) hover:bg-blue-50"
                               : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                           }`}
                         >

@@ -1,4 +1,5 @@
-import type { Report, ReportFigures, ReportGroup, ReportType } from "@/types/report";
+import { labelWithUnit, withUnit, type ProductionUnits } from "@/lib/production-units";
+import type { Report, ReportFigures, ReportGroup, ReportRow, ReportType } from "@/types/report";
 
 // The report table as plain rows, shared by the page, the Excel file and the PDF.
 
@@ -21,21 +22,47 @@ export function groupLabel(type: ReportType, g: ReportGroup) {
   return g.skuCode!;
 }
 
-const FIGURE_COLUMNS = ["Output (pcs)", "Reject (pcs)", "Availability", "Performance", "Quality", "OEE"];
+const FIGURE_COUNT = 6;
+const NO_UNITS: ProductionUnits = { output: "", reject: "" };
 
-export const reportColumns = (type: ReportType, machineLabel: string) => [
+export const reportColumns = (type: ReportType, machineLabel: string, units: ProductionUnits) => [
   reportTypeOf(type).groupColumn.replace("Machine", machineLabel),
   machineLabel,
   "SKU",
   "Product",
-  ...FIGURE_COLUMNS,
+  labelWithUnit("Output", units.output),
+  labelWithUnit("Reject", units.reject),
+  "Availability",
+  "Performance",
+  "Quality",
+  "OEE",
 ];
+
+/**
+ * Output / reject units of a report. `header` is the unit all machines in it share ("" when they
+ * differ); `row` and `group` give the unit to print in a cell, only where the header has none.
+ */
+export function reportUnits(r: Report, unitsOf: (machineIds: string[]) => ProductionUnits) {
+  const ids = (rows: ReportRow[]) => rows.map((x) => x.machineId);
+  const header = unitsOf(r.groups.flatMap((g) => ids(g.rows)));
+  const cell = (machineIds: string[]): ProductionUnits => {
+    const u = unitsOf(machineIds);
+    return { output: header.output ? "" : u.output, reject: header.reject ? "" : u.reject };
+  };
+  return {
+    header,
+    mixed: !header.output || !header.reject,
+    row: (row: ReportRow) => cell([row.machineId]),
+    group: (g: ReportGroup) => cell(ids(g.rows)),
+  };
+}
+export type ReportUnits = ReturnType<typeof reportUnits>;
 
 const pct = (v: number | null) => (v === null ? "—" : `${v.toFixed(1)}%`);
 const num = new Intl.NumberFormat("en-US");
-export const formatFigures = (f: ReportFigures) => [
-  num.format(f.output),
-  num.format(f.reject),
+export const formatFigures = (f: ReportFigures, units: ProductionUnits = NO_UNITS) => [
+  withUnit(num.format(f.output), units.output),
+  withUnit(num.format(f.reject), units.reject),
   pct(f.availability),
   pct(f.performance),
   pct(f.quality),
@@ -72,28 +99,39 @@ function infoLines(r: Report, filters: ReportFilterText, machineLabel: string) {
   ];
 }
 
-export async function exportReportExcel(r: Report, filters: ReportFilterText, machineLabel: string) {
+export async function exportReportExcel(r: Report, filters: ReportFilterText, machineLabel: string, units: ReportUnits) {
   const XLSX = await import("xlsx");
-  const columns = reportColumns(r.type, machineLabel);
+  const columns = reportColumns(r.type, machineLabel, units.header);
+  // Numbers stay numeric; with different units per machine a last column names them.
+  const unitCell = (u: ProductionUnits) => (units.mixed ? [`${u.output || "-"} / ${u.reject || "-"}`] : []);
   const aoa: (string | number)[][] = [
     ...infoLines(r, filters, machineLabel),
     [],
-    [...columns.slice(0, 6), "Availability (%)", "Performance (%)", "Quality (%)", "OEE (%)"],
+    [
+      ...columns.slice(0, 6),
+      "Availability (%)",
+      "Performance (%)",
+      "Quality (%)",
+      "OEE (%)",
+      ...(units.mixed ? ["Unit (Output / Reject)"] : []),
+    ],
   ];
   for (const g of r.groups) {
-    aoa.push([...totalCells(r.type, g), ...rawFigures(g.total)]);
+    aoa.push([...totalCells(r.type, g), ...rawFigures(g.total), ...unitCell(units.group(g))]);
     const label = groupLabel(r.type, g);
-    for (const row of g.rows) aoa.push([label, row.machineNo, row.skuCode, row.productName, ...rawFigures(row)]);
+    for (const row of g.rows) {
+      aoa.push([label, row.machineNo, row.skuCode, row.productName, ...rawFigures(row), ...unitCell(units.row(row))]);
+    }
   }
   aoa.push(["Grand total", "", "", "", ...rawFigures(r.total)]);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 30 }, ...FIGURE_COLUMNS.map(() => ({ wch: 14 }))];
+  ws["!cols"] = [{ wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 30 }, ...Array.from({ length: FIGURE_COUNT }, () => ({ wch: 14 }))];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, reportTypeOf(r.type).label);
   XLSX.writeFile(wb, fileName(r, "xlsx"));
 }
 
-export async function exportReportPdf(r: Report, filters: ReportFilterText, machineLabel: string) {
+export async function exportReportPdf(r: Report, filters: ReportFilterText, machineLabel: string, units: ReportUnits) {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   doc.setFontSize(14);
@@ -105,8 +143,8 @@ export async function exportReportPdf(r: Report, filters: ReportFilterText, mach
 
   const total = { fontStyle: "bold" as const, fillColor: [238, 243, 250] as [number, number, number] };
   const body = r.groups.flatMap((g) => [
-    [...totalCells(r.type, g), ...formatFigures(g.total)].map((content) => ({ content, styles: total })),
-    ...g.rows.map((row) => ["", row.machineNo, row.skuCode, row.productName, ...formatFigures(row)]),
+    [...totalCells(r.type, g), ...formatFigures(g.total, units.group(g))].map((content) => ({ content, styles: total })),
+    ...g.rows.map((row) => ["", row.machineNo, row.skuCode, row.productName, ...formatFigures(row, units.row(row))]),
   ]);
   body.push(
     ["Grand total", "", "", "", ...formatFigures(r.total)].map((content) => ({
@@ -116,7 +154,7 @@ export async function exportReportPdf(r: Report, filters: ReportFilterText, mach
   );
   autoTable(doc, {
     startY: 33,
-    head: [reportColumns(r.type, machineLabel)],
+    head: [reportColumns(r.type, machineLabel, units.header)],
     body,
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.6, lineColor: [226, 232, 240] },

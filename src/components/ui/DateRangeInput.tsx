@@ -13,7 +13,7 @@ export default function DateRangeInput({
   onChange: (range: { from: string; to: string }) => void;
 }) {
   return (
-    <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-blue-400">
+    <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-surface px-3 focus-within:border-blue-400">
       <CalendarDays size={18} className="shrink-0 text-slate-500" />
       <input
         type="date"

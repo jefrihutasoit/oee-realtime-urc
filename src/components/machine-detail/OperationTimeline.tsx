@@ -8,7 +8,11 @@ const SEGMENT: Record<TimelineStatus, { color: string; label: string }> = {
   RUN: { color: "bg-emerald-500", label: statusStyles.RUN.label },
   STOP: { color: "bg-amber-400", label: statusStyles.STOP.label },
   OFF: { color: "bg-slate-400", label: statusStyles.OFF.label },
-  NO_DATA: { color: "bg-slate-200", label: "No data" },
+  // Hatched, so "no reading" is not mistaken for the empty part after now.
+  NO_DATA: {
+    color: "bg-[repeating-linear-gradient(135deg,var(--color-slate-200)_0_5px,var(--color-slate-300)_5px_10px)]",
+    label: "No data",
+  },
 };
 
 const hourFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -17,9 +21,10 @@ const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-d
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-/** "1h" shows the last hour (with a little room after now), "shift" the whole shift. */
-type Zoom = "1h" | "shift";
+/** "30m" / "1h" show the last half hour / hour up to now (with a little room after it), "shift" the whole shift. */
+type Zoom = "30m" | "1h" | "shift";
 const ZOOMS: { value: Zoom; label: string }[] = [
+  { value: "30m", label: "Last 30 min" },
   { value: "1h", label: "Last 1 h" },
   { value: "shift", label: "Shift" },
 ];
@@ -38,10 +43,13 @@ function windowOf(zoom: Zoom, start: number, end: number, now: number) {
     for (let t = start; t <= end; t += HOUR) ticks.push(t);
     return { from: start, to: end, ticks };
   }
-  const from = Math.max(start, now - 50 * MINUTE);
-  const to = Math.min(end, from + HOUR);
+  const span = zoom === "30m" ? 30 * MINUTE : HOUR;
+  const step = zoom === "30m" ? 5 * MINUTE : 10 * MINUTE;
+  // About 5% of the window is left after now, so the "now" marker stays in view.
+  const from = Math.max(start, now - span * 0.95);
+  const to = Math.min(end, from + span);
   const ticks: number[] = [];
-  for (let t = Math.ceil(from / (10 * MINUTE)) * 10 * MINUTE; t <= to; t += 10 * MINUTE) ticks.push(t);
+  for (let t = Math.ceil(from / step) * step; t <= to; t += step) ticks.push(t);
   return { from, to, ticks };
 }
 
@@ -73,7 +81,7 @@ export default function OperationTimeline({ data }: { data: MachineTimeline | nu
               onClick={() => setZoom(z.value)}
               aria-pressed={zoom === z.value}
               className={`rounded-md px-2.5 py-1 font-medium ${
-                zoom === z.value ? "bg-[#1E6FD9] text-white" : "text-slate-600 hover:bg-slate-50"
+                zoom === z.value ? "bg-(--brand) text-white" : "text-slate-600 hover:bg-slate-50"
               }`}
             >
               {z.label}
@@ -82,7 +90,8 @@ export default function OperationTimeline({ data }: { data: MachineTimeline | nu
         </div>
       </div>
 
-      <div className="relative h-8 overflow-hidden rounded-md bg-[repeating-linear-gradient(135deg,#F1F5F9_0_6px,#E2E8F0_6px_12px)]">
+      {/* The empty track is the time still to come; recorded time is drawn over it. */}
+      <div className="relative h-8 overflow-hidden rounded-md border border-dashed border-slate-300 bg-slate-50">
         {data.segments.map((s) => {
           const from = Date.parse(s.start);
           const to = Date.parse(s.end);
@@ -99,15 +108,25 @@ export default function OperationTimeline({ data }: { data: MachineTimeline | nu
           );
         })}
         <div
-          className="absolute inset-y-0 w-0.5 bg-[#1E3A5F]"
+          className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-(--brand) shadow-[0_0_0_1px_var(--color-surface)]"
           style={{ left: `${pct(now)}%` }}
           title={`Now ${timeFmt.format(now)}`}
         />
       </div>
 
       <div className="relative h-4 text-[11px] text-slate-400 tabular-nums">
+        {/* "Now" under the marker; hour ticks close to it give way. */}
+        {now >= view.from && now <= view.to && (
+          <span
+            className={`absolute font-semibold text-(--brand) ${pct(now) >= 95 ? "-translate-x-full" : "-translate-x-1/2"}`}
+            style={{ left: `${pct(now)}%` }}
+          >
+            Now {hourFmt.format(now)}
+          </span>
+        )}
         {view.ticks.map((t) => {
           const p = pct(t);
+          if (Math.abs(p - pct(now)) < 6) return null;
           return (
             <span
               key={t}

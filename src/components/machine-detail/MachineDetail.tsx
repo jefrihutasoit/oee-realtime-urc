@@ -8,6 +8,7 @@ import { StatusPill } from "@/components/dashboard/MachineCard";
 import SkuImage from "@/components/dashboard/SkuImage";
 import { useMachineDetail } from "@/hooks/useMachineDetail";
 import { useMachineLabel } from "@/lib/machine-label";
+import { withUnit, type ProductionUnits } from "@/lib/production-units";
 import type { MachineHistory } from "@/types/oee";
 import OperationTimeline, { duration } from "./OperationTimeline";
 
@@ -33,7 +34,7 @@ function Card({
   className?: string;
 }) {
   return (
-    <section className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
+    <section className={`overflow-hidden rounded-xl border border-slate-200 bg-surface ${className}`}>
       {title && (
         <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
@@ -52,7 +53,7 @@ function Ring({ label, value, color }: { label: string; value: number; color: st
     <div className="flex flex-col items-center gap-1">
       <div className="relative size-16">
         <svg viewBox="0 0 64 64" className="size-16 -rotate-90" aria-hidden>
-          <circle cx="32" cy="32" r={r} fill="none" stroke="#E2E8F0" strokeWidth="6" />
+          <circle cx="32" cy="32" r={r} fill="none" style={{ stroke: "var(--color-slate-200)" }} strokeWidth="6" />
           <circle
             cx="32"
             cy="32"
@@ -85,7 +86,15 @@ function Stat({ label, value, sub, tone = "text-slate-900" }: { label: string; v
 }
 
 /** Output & reject log and status event log. Status-only machines get the event log alone. */
-function Logs({ history, showProduction }: { history: MachineHistory | null; showProduction: boolean }) {
+function Logs({
+  history,
+  showProduction,
+  units,
+}: {
+  history: MachineHistory | null;
+  showProduction: boolean;
+  units: ProductionUnits;
+}) {
   const [selected, setSelected] = useState<"production" | "events">("production");
   const tab = showProduction ? selected : "events";
   const tabs = (
@@ -108,7 +117,7 @@ function Logs({ history, showProduction }: { history: MachineHistory | null; sho
             aria-selected={tab === key}
             onClick={() => setSelected(key)}
             className={`border-b-2 px-3 py-2.5 text-sm font-medium ${
-              tab === key ? "border-[#1E6FD9] text-[#1E6FD9]" : "border-transparent text-slate-500 hover:text-slate-700"
+              tab === key ? "border-(--brand) text-(--brand)" : "border-transparent text-slate-500 hover:text-slate-700"
             }`}
           >
             {label}
@@ -128,7 +137,7 @@ function Logs({ history, showProduction }: { history: MachineHistory | null; sho
                 <tr>
                   <th className={th}>Time</th>
                   <th className={th}>Type</th>
-                  <th className={`${th} text-right`}>Quantity (pcs)</th>
+                  <th className={`${th} text-right`}>Quantity</th>
                   <th className={`${th} text-right`}>Counter</th>
                 </tr>
               </thead>
@@ -145,7 +154,14 @@ function Logs({ history, showProduction }: { history: MachineHistory | null; sho
                         {e.type === "OUTPUT" ? "Output" : "Reject"}
                       </span>
                     </td>
-                    <td className="px-4 py-1.5 text-right font-medium text-slate-900">+{fmt.format(e.quantity)}</td>
+                    <td className="px-4 py-1.5 text-right font-medium text-slate-900">
+                      +{fmt.format(e.quantity)}
+                      {(e.type === "OUTPUT" ? units.output : units.reject) && (
+                        <span className="ml-1 text-xs font-normal text-slate-400">
+                          {e.type === "OUTPUT" ? units.output : units.reject}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-1.5 text-right text-slate-500">{fmt.format(e.counter)}</td>
                   </tr>
                 ))}
@@ -194,10 +210,10 @@ export default function MachineDetail({ id }: { id: string }) {
           <>
             <p className="text-red-600">{error}</p>
             <div className="flex gap-4">
-              <button type="button" onClick={reload} className="font-medium text-[#1E6FD9] hover:underline">
+              <button type="button" onClick={reload} className="font-medium text-(--brand) hover:underline">
                 Retry
               </button>
-              <Link href="/dashboard/machine" className="font-medium text-[#1E6FD9] hover:underline">
+              <Link href="/dashboard/machine" className="font-medium text-(--brand) hover:underline">
                 Back to machines
               </Link>
             </div>
@@ -221,16 +237,56 @@ export default function MachineDetail({ id }: { id: string }) {
   const sku = productCode ? skus.find((s) => s.skuId.toLowerCase() === productCode.toLowerCase()) : undefined;
   const oeeColor = oee ? (oee.oee >= OEE_TARGET ? "#22A447" : oee.oee >= 60 ? "#F5A524" : "#E5484D") : "#94A3B8";
 
+  const adaptive = machine.realtimeMode === "adaptive";
+  /** A value as shown: numbers formatted, text (adaptive tags) as sent. */
+  const show = (v: number | string | null | undefined) =>
+    v === null || v === undefined ? "—" : typeof v === "number" ? fmt.format(v) : v;
+  const unitText = (unit: string) =>
+    unit && <span className="ml-1 font-sans text-xs font-normal text-slate-500">{unit}</span>;
+  const adaptiveValues = isActive && monitoring?.mode === "adaptive" ? monitoring.values : [];
+
   const realtimeTags = (
     <Card
       title="Realtime Tags"
-      aside={monitoring ? `Updated ${timeFmt.format(new Date(monitoring.updatedAt))}` : undefined}
+      aside={
+        monitoring
+          ? `${adaptive ? "Adaptive · " : ""}Updated ${timeFmt.format(new Date(monitoring.updatedAt))}`
+          : adaptive
+            ? "Adaptive"
+            : undefined
+      }
       className="h-fit"
     >
-      {machine.monitoringTags.length === 0 ? (
+      {adaptive ? (
+        adaptiveValues.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-slate-500">
+            Waiting for the gateway: the tags it publishes on{" "}
+            <code className="rounded bg-slate-100 px-1 text-xs">{monitoring?.topic ?? `…/${machine.machineNo}`}</code>{" "}
+            (other than status, output, reject and product) appear here.
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-slate-100">
+              {adaptiveValues.map((t) => (
+                <tr
+                  key={t.id}
+                  title={`${t.tagName}${t.updatedAt ? ` · last published ${timeFmt.format(new Date(t.updatedAt))}` : ""}`}
+                  className="hover:bg-slate-50"
+                >
+                  <td className="px-4 py-2 text-slate-600">{t.name}</td>
+                  <td className="px-4 py-2 text-right font-mono font-semibold text-slate-900 tabular-nums">
+                    {show(t.value)}
+                    {unitText(t.unit)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      ) : machine.monitoringTags.length === 0 ? (
         <p className="px-4 py-4 text-sm text-slate-500">
           No realtime tags registered.{" "}
-          <Link href="/settings/machines" className="text-[#1E6FD9] hover:underline">
+          <Link href="/settings/machines" className="text-(--brand) hover:underline">
             Add in Machine Management
           </Link>
         </p>
@@ -243,7 +299,8 @@ export default function MachineDetail({ id }: { id: string }) {
                 <tr key={t.id} title={t.tagName} className="hover:bg-slate-50">
                   <td className="px-4 py-2 text-slate-600">{t.name}</td>
                   <td className="px-4 py-2 text-right font-mono font-semibold text-slate-900 tabular-nums">
-                    {v === null || v === undefined ? "—" : fmt.format(v)}
+                    {show(v)}
+                    {unitText(t.unit)}
                   </td>
                 </tr>
               );
@@ -271,11 +328,11 @@ export default function MachineDetail({ id }: { id: string }) {
         <Link
           href="/dashboard/machine"
           aria-label={`Back to ${name.many.toLowerCase()}`}
-          className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+          className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
         >
           <ArrowLeft size={18} />
         </Link>
-        <h2 className={`text-xl font-semibold ${isActive ? "text-[#1E3A5F]" : "text-slate-400"}`}>{machine.machineNo}</h2>
+        <h2 className={`text-xl font-semibold ${isActive ? "text-(--brand-ink)" : "text-slate-400"}`}>{machine.machineNo}</h2>
         <span className="text-sm text-slate-500">{machine.machineName}</span>
         <StatusPill status={status} inactive={!isActive} />
         {isActive && (
@@ -296,7 +353,7 @@ export default function MachineDetail({ id }: { id: string }) {
       {!isActive && (
         <p className="rounded-lg border border-dashed border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-600">
           This machine is <strong>inactive</strong>: it is not monitored and does not count in any total.{" "}
-          <Link href="/settings/machines" className="font-medium text-[#1E6FD9] hover:underline">
+          <Link href="/settings/machines" className="font-medium text-(--brand) hover:underline">
             Activate it in Machine Management
           </Link>
         </p>
@@ -344,12 +401,12 @@ export default function MachineDetail({ id }: { id: string }) {
                 <div className="grid grid-cols-2 divide-slate-100 border-t border-slate-100 sm:grid-cols-4 sm:divide-x">
                   <Stat
                     label="Output"
-                    value={oee ? `${fmt.format(oee.output)} pcs` : "—"}
-                    sub={oee ? `Ideal ${fmt.format(oee.idealOutput)} pcs` : undefined}
+                    value={oee ? withUnit(fmt.format(oee.output), machine.outputUnit) : "—"}
+                    sub={oee ? `Ideal ${withUnit(fmt.format(oee.idealOutput), machine.outputUnit)}` : undefined}
                   />
                   <Stat
                     label="Reject"
-                    value={oee ? `${fmt.format(oee.reject)} pcs` : "—"}
+                    value={oee ? withUnit(fmt.format(oee.reject), machine.rejectUnit) : "—"}
                     sub={oee ? `Tag ${fmt.format(oee.rejectTag)} · Input ${fmt.format(oee.rejectInput)}` : undefined}
                     tone="text-red-600"
                   />
@@ -401,7 +458,11 @@ export default function MachineDetail({ id }: { id: string }) {
           </>
         )}
 
-        <Logs history={history} showProduction={showOee} />
+        <Logs
+          history={history}
+          showProduction={showOee}
+          units={{ output: machine.outputUnit, reject: machine.rejectUnit }}
+        />
       </div>
     </div>
   );

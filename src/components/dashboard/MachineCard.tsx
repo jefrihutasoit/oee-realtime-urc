@@ -82,7 +82,7 @@ export default function MachineCard({ machine }: { machine: LiveMachine }) {
       <span className="truncate text-base font-semibold text-slate-900">{machine.machineNo}</span>
       <StatusPill status={dashboardStatus(machine.status)} inactive={!machine.isActive} />
       {machine.isActive && (
-        <ChevronRight size={18} className="ml-auto text-slate-400 group-hover:text-[#1E6FD9]" aria-hidden />
+        <ChevronRight size={18} className="ml-auto text-slate-400 group-hover:text-(--brand)" aria-hidden />
       )}
     </div>
   );
@@ -106,7 +106,7 @@ export default function MachineCard({ machine }: { machine: LiveMachine }) {
     <div className="relative" onMouseEnter={showPopover} onMouseLeave={hidePopover}>
       <Link
         href={`/dashboard/machine/${encodeURIComponent(machine.id)}`}
-        className="group block rounded-xl border border-slate-200 bg-white p-3 transition-shadow hover:border-blue-200 hover:shadow-md focus-visible:outline-2 focus-visible:outline-blue-500"
+        className="group block rounded-xl border border-slate-200 bg-surface p-3 transition-shadow hover:border-blue-200 hover:shadow-md focus-visible:outline-2 focus-visible:outline-blue-500"
       >
         {header}
 

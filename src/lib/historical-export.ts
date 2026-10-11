@@ -1,3 +1,4 @@
+import { labelWithUnit, type ProductionUnits } from "@/lib/production-units";
 import { dmy, type ReportFilterText } from "@/lib/report-export";
 import type { HistoricalData, HourlyDetail } from "@/types/historical";
 import type { ReportFigures } from "@/types/report";
@@ -12,12 +13,23 @@ export function hourRange(iso: string) {
 
 const figures = (f: ReportFigures) => [f.output, f.reject, f.oee ?? "", f.availability ?? "", f.performance ?? "", f.quality ?? ""];
 
+const figureHead = (u: ProductionUnits) => [
+  labelWithUnit("Output", u.output),
+  labelWithUnit("Reject", u.reject),
+  "OEE (%)",
+  "Availability (%)",
+  "Performance (%)",
+  "Quality (%)",
+];
+
 /** Workbook with the machine table, the figures per day and machine, and the hourly detail on screen. */
 export async function exportHistoricalExcel(
   data: HistoricalData,
   detail: HourlyDetail | null,
   filters: ReportFilterText,
-  machineLabel: string
+  machineLabel: string,
+  /** Common output / reject unit of the given machines ("" when they differ). */
+  unitsOf: (machineIds: string[]) => ProductionUnits
 ) {
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
@@ -29,12 +41,19 @@ export async function exportHistoricalExcel(
     ["Generated", new Date(data.generatedAt).toLocaleString("en-GB")],
     [],
   ];
-  const head = ["Output (pcs)", "Reject (pcs)", "OEE (%)", "Availability (%)", "Performance (%)", "Quality (%)"];
+  const units = unitsOf(data.machines.map((m) => m.machineId));
+  const head = figureHead(units);
+  // With different units per machine the header has none, so each row names its own.
+  const mixed = !units.output || !units.reject;
+  const rowUnits = (id: string) => {
+    const u = unitsOf([id]);
+    return mixed ? [`${u.output || "-"} / ${u.reject || "-"}`] : [];
+  };
 
   const byMachine = XLSX.utils.aoa_to_sheet([
     ...info,
-    [machineLabel, ...head],
-    ...data.machines.map((m) => [m.machineNo, ...figures(m)]),
+    [machineLabel, ...head, ...(mixed ? ["Unit (Output / Reject)"] : [])],
+    ...data.machines.map((m) => [m.machineNo, ...figures(m), ...rowUnits(m.machineId)]),
     ["Total", ...figures(data.total)],
   ]);
   byMachine["!cols"] = [{ wch: 16 }, ...head.map(() => ({ wch: 15 }))];
@@ -42,7 +61,16 @@ export async function exportHistoricalExcel(
 
   const daily = XLSX.utils.aoa_to_sheet([
     ...info,
-    ["Date", ...data.machines.flatMap((m) => [`${m.machineNo} Output`, `${m.machineNo} Reject`, `${m.machineNo} OEE (%)`]), "Total Output", "Total Reject", "Total OEE (%)"],
+    [
+      "Date",
+      ...data.machines.flatMap((m) => {
+        const u = unitsOf([m.machineId]);
+        return [labelWithUnit(`${m.machineNo} Output`, u.output), labelWithUnit(`${m.machineNo} Reject`, u.reject), `${m.machineNo} OEE (%)`];
+      }),
+      labelWithUnit("Total Output", units.output),
+      labelWithUnit("Total Reject", units.reject),
+      "Total OEE (%)",
+    ],
     ...data.days.map((d) => [
       dmy(d.date),
       ...data.machines.flatMap((m) => {
@@ -62,7 +90,7 @@ export async function exportHistoricalExcel(
       [machineLabel, detail.machineNo],
       ["Production date", dmy(detail.date)],
       [],
-      ["Time", "SKU", "Product", ...head, "Remarks"],
+      ["Time", "SKU", "Product", ...figureHead(unitsOf([detail.machineId])), "Remarks"],
       ...detail.rows.map((r) => [hourRange(r.hourStart), r.skuCode, r.productName, ...figures(r), r.remarks]),
       ["Total", "", "", ...figures(detail.total), ""],
     ]);

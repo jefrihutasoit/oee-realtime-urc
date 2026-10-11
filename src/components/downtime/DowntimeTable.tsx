@@ -52,7 +52,7 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white">
+    <section className="rounded-xl border border-slate-200 bg-surface">
       <div className="flex flex-wrap items-end justify-between gap-3 p-4">
         <div>
           <h3 className="font-semibold text-slate-900">Downtime Data</h3>
@@ -66,7 +66,7 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
             type="date"
             value={date}
             onChange={(e) => e.target.value && onDateChange(e.target.value)}
-            className="mt-1 block h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none"
+            className="mt-1 block h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none"
           />
         </label>
       </div>

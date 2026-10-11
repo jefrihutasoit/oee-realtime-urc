@@ -29,7 +29,7 @@ function duration(seconds: number) {
 }
 
 /** Live details of one machine, shown on hover in the 3D layout and on the dashboard. */
-export default function MachineInfoCard({ machine }: { machine: LiveMachine }) {
+export default function MachineInfoCard({ machine, className = "w-64 shadow-xl" }: { machine: LiveMachine; className?: string }) {
   const state = pinStateOf(machine);
   const { color, label } = PIN_STYLES[state];
   const live = machine.live;
@@ -38,7 +38,7 @@ export default function MachineInfoCard({ machine }: { machine: LiveMachine }) {
   const name = useMachineLabel();
 
   return (
-    <div className="w-64 overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-xl">
+    <div className={`overflow-hidden rounded-xl border border-slate-200 bg-surface text-left ${className}`}>
       <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
         <span className="size-2.5 rounded-full" style={{ background: color }} />
         <span className="font-semibold text-slate-900">{machine.machineNo}</span>
@@ -99,9 +99,13 @@ export default function MachineInfoCard({ machine }: { machine: LiveMachine }) {
             <dt className="text-slate-500">Output</dt>
             <dd className="text-right font-medium text-slate-900 tabular-nums">
               {fmt.format(live.output)} / {fmt.format(live.idealOutput)}
+              {machine.outputUnit && <span className="ml-1 font-normal text-slate-400">{machine.outputUnit}</span>}
             </dd>
             <dt className="text-slate-500">Reject</dt>
-            <dd className="text-right font-medium text-red-600 tabular-nums">{fmt.format(live.reject)}</dd>
+            <dd className="text-right font-medium text-red-600 tabular-nums">
+              {fmt.format(live.reject)}
+              {machine.rejectUnit && <span className="ml-1 font-normal text-slate-400">{machine.rejectUnit}</span>}
+            </dd>
             <dt className="text-slate-500">Uptime</dt>
             <dd className="text-right font-medium text-emerald-700 tabular-nums">{duration(live.uptimeSeconds)}</dd>
             <dt className="text-slate-500">Stop / Breakdown</dt>
@@ -115,7 +119,7 @@ export default function MachineInfoCard({ machine }: { machine: LiveMachine }) {
       {machine.isActive && (
         <Link
           href={`/dashboard/machine/${encodeURIComponent(machine.id)}`}
-          className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs font-medium text-[#1E6FD9] hover:bg-slate-50"
+          className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs font-medium text-(--brand) hover:bg-slate-50"
         >
           Open {name.one.toLowerCase()} details
           <ChevronRight size={14} />

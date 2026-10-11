@@ -72,7 +72,7 @@ export default function ManualRejectInput() {
       {toast && (
         <div
           role="status"
-          className="fixed right-4 bottom-4 z-50 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
+          className="fixed right-4 bottom-4 z-50 theme-fixed rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
         >
           {toast}
         </div>

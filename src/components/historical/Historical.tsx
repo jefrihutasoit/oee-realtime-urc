@@ -6,6 +6,7 @@ import DateRangeInput from "@/components/ui/DateRangeInput";
 import MultiSelect from "@/components/ui/MultiSelect";
 import { OEE_TARGET } from "@/config/oee";
 import { exportHistoricalExcel, hourRange } from "@/lib/historical-export";
+import { labelWithUnit, useProductionUnits, withUnit } from "@/lib/production-units";
 import { historicalApi } from "@/lib/historical-api";
 import { useMachineLabel } from "@/lib/machine-label";
 import { machineApi } from "@/lib/machine-api";
@@ -50,7 +51,7 @@ const defaultFilters = (): Filters => {
 const apiFilter = (f: Filters) => ({ ...f, machines: f.machines.join(","), skus: f.skus.join(",") });
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
 
 const ymdOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -65,8 +66,18 @@ function periodOf(date: string, period: Period) {
   return { key: ymdOf(d), label: `${dmy(ymdOf(d)).slice(0, 5)} – ${dmy(ymdOf(end))}` };
 }
 
+/** A count, with its unit in smaller grey text when given. */
+function Qty({ value, unit }: { value: number; unit: string }) {
+  return (
+    <>
+      {num.format(value)}
+      {unit && <span className="ml-1 text-xs text-slate-400">{unit}</span>}
+    </>
+  );
+}
+
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-xl border border-slate-200 bg-white p-4 md:p-5 ${className}`}>{children}</section>;
+  return <section className={`rounded-xl border border-slate-200 bg-surface p-4 md:p-5 ${className}`}>{children}</section>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -104,6 +115,7 @@ const td = "border-t border-slate-100 px-3 py-2";
 
 export default function Historical() {
   const name = useMachineLabel();
+  const unitsOf = useProductionUnits();
   const [machines, setMachines] = useState<MachineRegistration[]>([]);
   const [skus, setSkus] = useState<SkuMaster[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -250,7 +262,7 @@ export default function Historical() {
     if (!data) return;
     setExporting(true);
     try {
-      await exportHistoricalExcel(data, shownDetail, filterText(applied), name.one);
+      await exportHistoricalExcel(data, shownDetail, filterText(applied), name.one, unitsOf);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed");
     } finally {
@@ -259,6 +271,10 @@ export default function Historical() {
   };
 
   const total: ReportFigures | null = data?.total ?? null;
+  // Totals show a unit only when all machines in the data share it; otherwise each machine row shows its own.
+  const units = unitsOf(data?.machines.map((m) => m.machineId) ?? []);
+  const rowUnit = (machineId: string, kind: "output" | "reject") => (units[kind] ? "" : unitsOf([machineId])[kind]);
+  const detailUnits = unitsOf(shownDetail ? [shownDetail.machineId] : []);
   const dim = loading ? "opacity-60 transition-opacity" : "transition-opacity";
   const detailMachineNo = data?.machines.find((m) => m.machineId === selection?.machineId)?.machineNo;
 
@@ -277,7 +293,7 @@ export default function Historical() {
             type="button"
             onClick={runExport}
             disabled={!data || exporting}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-[#1E6FD9] hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-surface px-4 text-sm font-medium text-(--brand) hover:bg-slate-50 disabled:opacity-50"
           >
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             Export
@@ -325,7 +341,7 @@ export default function Historical() {
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#1E6FD9] px-6 text-sm font-medium text-white hover:bg-[#185DB8] disabled:opacity-60"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-(--brand) px-6 text-sm font-medium text-white hover:bg-(--brand-hover) disabled:opacity-60"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
               Apply
@@ -333,7 +349,7 @@ export default function Historical() {
             <button
               type="button"
               onClick={() => setFilters(defaultFilters())}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-50 px-4 text-sm font-medium text-[#1E6FD9] hover:bg-blue-100"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-50 px-4 text-sm font-medium text-(--brand) hover:bg-blue-100"
             >
               <RotateCcw size={16} />
               Reset
@@ -359,13 +375,13 @@ export default function Historical() {
           {/* KPIs */}
           <Card className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6">
             <Kpi label="Total Output">
-              <Box size={34} className="shrink-0 text-[#1E6FD9]" />
-              <p className="text-2xl font-semibold text-slate-900 tabular-nums">{num.format(total!.output)} pcs</p>
+              <Box size={34} className="shrink-0 text-(--brand)" />
+              <p className="text-2xl font-semibold text-slate-900 tabular-nums">{withUnit(num.format(total!.output), units.output)}</p>
             </Kpi>
             <Kpi label="Total Reject">
               <CircleX size={34} className="shrink-0 text-red-500" />
               <div>
-                <p className="text-2xl font-semibold text-slate-900 tabular-nums">{num.format(total!.reject)} pcs</p>
+                <p className="text-2xl font-semibold text-slate-900 tabular-nums">{withUnit(num.format(total!.reject), units.reject)}</p>
                 <p className="text-xs text-slate-500">
                   {total!.output > 0 ? `${((total!.reject / total!.output) * 100).toFixed(2)}% of output` : "—"}
                 </p>
@@ -392,7 +408,7 @@ export default function Historical() {
                   value={metric}
                   onChange={(e) => setMetric(e.target.value as Metric)}
                   aria-label="Trend metric"
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none"
+                  className="h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none"
                 >
                   {METRICS.map((m) => (
                     <option key={m.value} value={m.value}>
@@ -416,7 +432,14 @@ export default function Historical() {
                   <thead>
                     <tr>
                       <th className={`${th} text-left`}>{name.one}</th>
-                      {["Output (pcs)", "Reject (pcs)", "OEE", "Availability", "Performance", "Quality"].map((h) => (
+                      {[
+                        labelWithUnit("Output", units.output),
+                        labelWithUnit("Reject", units.reject),
+                        "OEE",
+                        "Availability",
+                        "Performance",
+                        "Quality",
+                      ].map((h) => (
                         <th key={h} className={`${th} text-right`}>
                           {h}
                         </th>
@@ -444,8 +467,12 @@ export default function Historical() {
                           )}
                           {m.machineNo}
                         </td>
-                        <td className={`${td} text-right tabular-nums`}>{num.format(m.output)}</td>
-                        <td className={`${td} text-right tabular-nums`}>{num.format(m.reject)}</td>
+                        <td className={`${td} text-right tabular-nums`}>
+                          <Qty value={m.output} unit={rowUnit(m.machineId, "output")} />
+                        </td>
+                        <td className={`${td} text-right tabular-nums`}>
+                          <Qty value={m.reject} unit={rowUnit(m.machineId, "reject")} />
+                        </td>
                         <td className={`${td} text-right font-semibold tabular-nums`}>{pct(m.oee)}</td>
                         <td className={`${td} text-right tabular-nums`}>{pct(m.availability)}</td>
                         <td className={`${td} text-right tabular-nums`}>{pct(m.performance)}</td>
@@ -455,7 +482,7 @@ export default function Historical() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-blue-50 font-semibold text-slate-900">
-                      <td className="px-3 py-2 text-[#1E6FD9]">Total</td>
+                      <td className="px-3 py-2 text-(--brand)">Total</td>
                       <td className="px-3 py-2 text-right tabular-nums">{num.format(data.total.output)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{num.format(data.total.reject)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{pct(data.total.oee)}</td>
@@ -481,7 +508,7 @@ export default function Historical() {
                       aria-selected={period === p}
                       onClick={() => setPeriod(p)}
                       className={`rounded-md px-4 py-1.5 capitalize ${
-                        period === p ? "bg-white font-medium text-[#1E6FD9] shadow-sm" : "text-slate-600 hover:text-slate-900"
+                        period === p ? "bg-surface font-medium text-(--brand) shadow-sm" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
                       {p}
@@ -506,12 +533,15 @@ export default function Historical() {
                       </th>
                     </tr>
                     <tr>
-                      {[...data.machines.map((m) => m.machineId), "total"].map((id) => (
-                        <Fragment key={id}>
-                          <th className={`${th} border-l text-right font-medium`}>Output (pcs)</th>
-                          <th className={`${th} text-right font-medium`}>Reject (pcs)</th>
-                        </Fragment>
-                      ))}
+                      {[...data.machines.map((m) => m.machineId), "total"].map((id) => {
+                        const u = id === "total" ? units : unitsOf([id]);
+                        return (
+                          <Fragment key={id}>
+                            <th className={`${th} border-l text-right font-medium`}>{labelWithUnit("Output", u.output)}</th>
+                            <th className={`${th} text-right font-medium`}>{labelWithUnit("Reject", u.reject)}</th>
+                          </Fragment>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -567,7 +597,7 @@ export default function Historical() {
                       value={selection.machineId}
                       onChange={(e) => setPickedDetail({ machineId: e.target.value, date: selection.date })}
                       aria-label={`Detail ${name.one.toLowerCase()}`}
-                      className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm focus:border-blue-400 focus:outline-none"
+                      className="h-8 rounded-lg border border-slate-200 bg-surface px-2 text-sm focus:border-blue-400 focus:outline-none"
                     >
                       {data.machines.map((m) => (
                         <option key={m.machineId} value={m.machineId}>
@@ -579,7 +609,7 @@ export default function Historical() {
                       value={selection.date}
                       onChange={(e) => setPickedDetail({ machineId: selection.machineId, date: e.target.value })}
                       aria-label="Detail date"
-                      className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm focus:border-blue-400 focus:outline-none"
+                      className="h-8 rounded-lg border border-slate-200 bg-surface px-2 text-sm focus:border-blue-400 focus:outline-none"
                     >
                       {[...daysWithData].reverse().map((d) => (
                         <option key={d.date} value={d.date}>
@@ -605,8 +635,8 @@ export default function Historical() {
                       <tr>
                         <th className={`${th} text-left`}>Time</th>
                         <th className={`${th} text-left`}>SKU</th>
-                        <th className={`${th} text-right`}>Output (pcs)</th>
-                        <th className={`${th} text-right`}>Reject (pcs)</th>
+                        <th className={`${th} text-right`}>{labelWithUnit("Output", detailUnits.output)}</th>
+                        <th className={`${th} text-right`}>{labelWithUnit("Reject", detailUnits.reject)}</th>
                         <th className={`${th} text-right`}>OEE</th>
                         <th className={`${th} text-left`}>Remarks</th>
                       </tr>

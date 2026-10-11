@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { withUnit, type ProductionUnits } from "@/lib/production-units";
 
 const hourFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 const fmt = new Intl.NumberFormat("en-US");
@@ -27,7 +28,7 @@ function Axes({ max, hours, format }: { max: number; hours: string[]; format: (v
         const y = PAD.top + plotH - (plotH * i) / 4;
         return (
           <g key={i}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="#e2e8f0" strokeWidth={1} />
+            <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} style={{ stroke: "var(--color-slate-200)" }} strokeWidth={1} />
             <text x={PAD.left - 6} y={y + 3} textAnchor="end" className="fill-slate-400">
               {format((max * i) / 4)}
             </text>
@@ -48,7 +49,7 @@ function Axes({ max, hours, format }: { max: number; hours: string[]; format: (v
 function Tooltip({ x, lines }: { x: number; lines: string[] }) {
   return (
     <div
-      className="pointer-events-none absolute top-1 z-10 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-[11px] whitespace-nowrap text-white shadow"
+      className="pointer-events-none absolute top-1 z-10 -translate-x-1/2 theme-fixed rounded-md bg-slate-900 px-2 py-1 text-[11px] whitespace-nowrap text-white shadow"
       style={{ left: `${(x / W) * 100}%` }}
     >
       {lines.map((l) => (
@@ -92,8 +93,8 @@ export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: strin
         })}
         {h && h.oee !== null && hover !== null && (
           <>
-            <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} stroke="#94a3b8" strokeDasharray="3 3" />
-            <circle cx={x(hover)} cy={y(h.oee)} r={5} fill={color} stroke="#fff" strokeWidth={2} />
+            <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} style={{ stroke: "var(--color-slate-400)" }} strokeDasharray="3 3" />
+            <circle cx={x(hover)} cy={y(h.oee)} r={5} fill={color} style={{ stroke: "var(--color-surface)" }} strokeWidth={2} />
           </>
         )}
         {data.map((d, i) => (
@@ -119,8 +120,14 @@ export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: strin
 const OUTPUT_COLOR = "#1E6FD9";
 const REJECT_COLOR = "#E5484D";
 
-/** Output and reject per hour as paired bars on one axis (pcs). */
-export function OutputRejectChart({ data }: { data: { hour: string; output: number; reject: number }[] }) {
+/** Output and reject per hour as paired bars on one axis. */
+export function OutputRejectChart({
+  data,
+  units,
+}: {
+  data: { hour: string; output: number; reject: number }[];
+  units: ProductionUnits;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const max = niceMax(Math.max(...data.map((d) => Math.max(d.output, d.reject))));
   const slot = plotW / data.length;
@@ -152,7 +159,7 @@ export function OutputRejectChart({ data }: { data: { hour: string; output: numb
           const center = PAD.left + slot * i + slot / 2;
           return (
             <g key={d.hour}>
-              {hover === i && <rect x={PAD.left + slot * i} y={PAD.top} width={slot} height={plotH} fill="#f1f5f9" />}
+              {hover === i && <rect x={PAD.left + slot * i} y={PAD.top} width={slot} height={plotH} style={{ fill: "var(--color-slate-100)" }} />}
               {bar(center - barW - 1, d.output, OUTPUT_COLOR)}
               {bar(center + 1, d.reject, REJECT_COLOR)}
               <rect
@@ -171,7 +178,11 @@ export function OutputRejectChart({ data }: { data: { hour: string; output: numb
       {h && hover !== null && (
         <Tooltip
           x={PAD.left + slot * hover + slot / 2}
-          lines={[hourFmt.format(new Date(h.hour)), `Output ${fmt.format(h.output)} pcs`, `Reject ${fmt.format(h.reject)} pcs`]}
+          lines={[
+            hourFmt.format(new Date(h.hour)),
+            `Output ${withUnit(fmt.format(h.output), units.output)}`,
+            `Reject ${withUnit(fmt.format(h.reject), units.reject)}`,
+          ]}
         />
       )}
     </div>
@@ -183,10 +194,13 @@ export function Donut({
   slices,
   center,
   sub,
+  className = "size-36",
 }: {
   slices: { label: string; value: number; color: string }[];
   center: string;
   sub: string;
+  /** Size of the chart; the text scales with it. */
+  className?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const total = slices.reduce((s, x) => s + x.value, 0);
@@ -194,8 +208,8 @@ export function Donut({
   const c = 2 * Math.PI * r;
   let offset = 0;
   return (
-    <svg viewBox="0 0 140 140" className="size-36 shrink-0" role="img" aria-label={`${center} ${sub}`}>
-      <circle cx={70} cy={70} r={r} fill="none" stroke="#f1f5f9" strokeWidth={22} />
+    <svg viewBox="0 0 140 140" className={`${className} shrink-0`} role="img" aria-label={`${center} ${sub}`}>
+      <circle cx={70} cy={70} r={r} fill="none" style={{ stroke: "var(--color-slate-100)" }} strokeWidth={22} />
       {total > 0 &&
         slices.map((s, i) => {
           const len = (s.value / total) * c;

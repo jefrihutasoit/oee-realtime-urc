@@ -18,6 +18,9 @@ export interface LiveMachine {
   line: string;
   isActive: boolean;
   oeeEnabled: boolean;
+  /** Units of the output and reject counters, e.g. "pcs"; "" when none. */
+  outputUnit: string;
+  rejectUnit: string;
   status: LiveStatus | null;
   live: MachineOee | null;
 }
@@ -98,6 +101,8 @@ export function useLiveMachines() {
             line: entry?.line ?? `Line ${m.machineNo[0]}`,
             isActive: m.isActive,
             oeeEnabled: m.oeeEnabled,
+            outputUnit: m.outputUnit,
+            rejectUnit: m.rejectUnit,
             status: entry?.status ?? null,
             live: entry?.oeeEnabled && m.oeeEnabled ? entry : null,
           };

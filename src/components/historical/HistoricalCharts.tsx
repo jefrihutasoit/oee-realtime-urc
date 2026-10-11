@@ -64,7 +64,7 @@ export function TrendChart({ dates, series, metric }: { dates: string[]; series:
         <g className="text-[10px]">
           {ticks.map((t) => (
             <g key={t}>
-              <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth={1} />
+              <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} style={{ stroke: "var(--color-slate-200)" }} strokeWidth={1} />
               <text x={PAD.left - 6} y={y(t) + 3} textAnchor="end" className="fill-slate-400">
                 {t}%
               </text>
@@ -79,7 +79,7 @@ export function TrendChart({ dates, series, metric }: { dates: string[]; series:
           )}
         </g>
         {hover !== null && (
-          <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} stroke="#94a3b8" strokeDasharray="3 3" />
+          <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} style={{ stroke: "var(--color-slate-400)" }} strokeDasharray="3 3" />
         )}
         {series.map((s) =>
           segmentsOf(s.values).map((seg) => (
@@ -105,7 +105,7 @@ export function TrendChart({ dates, series, metric }: { dates: string[]; series:
       </svg>
       {hover !== null && (
         <div
-          className="pointer-events-none absolute top-0 z-10 rounded-md bg-slate-900 px-2.5 py-1.5 text-[11px] whitespace-nowrap text-white shadow"
+          className="pointer-events-none absolute top-0 z-10 theme-fixed rounded-md bg-slate-900 px-2.5 py-1.5 text-[11px] whitespace-nowrap text-white shadow"
           style={
             x(hover) > W / 2
               ? { right: `${100 - (x(hover) / W) * 100 + 1.5}%` }
@@ -145,7 +145,7 @@ export function Ring({ value, color }: { value: number | null; color: string }) 
   const share = Math.min(Math.max(value ?? 0, 0), 100) / 100;
   return (
     <svg viewBox="0 0 56 56" className="size-14 shrink-0" aria-hidden>
-      <circle cx={28} cy={28} r={r} fill="none" stroke="#e2e8f0" strokeWidth={7} />
+      <circle cx={28} cy={28} r={r} fill="none" style={{ stroke: "var(--color-slate-200)" }} strokeWidth={7} />
       {share > 0 && (
         <circle
           cx={28}

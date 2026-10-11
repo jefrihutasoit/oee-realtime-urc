@@ -17,7 +17,7 @@ const rows: { key: keyof Lists; status: MachineStatus; hint: string }[] = [
 ];
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none aria-invalid:border-red-400";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 font-mono text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none aria-invalid:border-red-400";
 
 /** "1, 2 3" → [1, 2, 3]; null when any token is not a number. */
 function parseList(text: string): number[] | null {
@@ -66,7 +66,7 @@ export default function StatusDefinitionForm() {
         {loadError ? (
           <>
             <p className="text-red-600">{loadError}</p>
-            <button type="button" onClick={load} className="font-medium text-[#1E6FD9] hover:underline">
+            <button type="button" onClick={load} className="font-medium text-(--brand) hover:underline">
               Retry
             </button>
           </>
@@ -120,7 +120,7 @@ export default function StatusDefinitionForm() {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-3xl space-y-4">
-      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-surface">
         {rows.map((r) => {
           const s = statusStyles[r.status];
           const invalid = parsed[r.key] === null;
@@ -165,7 +165,7 @@ export default function StatusDefinitionForm() {
               aria-label="Status for values not listed"
               value={unmatched}
               onChange={(e) => setUnmatched(e.target.value as MachineStatus)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none sm:w-48"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none sm:w-48"
             >
               <option value="RUN">Treat as Run</option>
               <option value="STOP">Treat as Stop</option>
@@ -176,7 +176,7 @@ export default function StatusDefinitionForm() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-surface px-5 py-3">
         <label htmlFor="test-value" className="text-sm font-medium text-slate-700">
           Test a value
         </label>

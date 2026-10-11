@@ -169,7 +169,7 @@ export default function LayoutMapping() {
         {loadError ? (
           <>
             <p className="text-red-600">{loadError}</p>
-            <button type="button" onClick={load} className="font-medium text-[#1E6FD9] hover:underline">
+            <button type="button" onClick={load} className="font-medium text-(--brand) hover:underline">
               Retry
             </button>
           </>
@@ -194,7 +194,7 @@ export default function LayoutMapping() {
           <h2 className="text-xl font-semibold text-slate-900">Layout Mapping</h2>
           <p className="text-sm text-slate-500">
             Select a machine, then click its unit on the 3D layout. Positions show live Run / Stop / Off on{" "}
-            <Link href="/dashboard/layout" className="font-medium text-[#1E6FD9] hover:underline">
+            <Link href="/dashboard/layout" className="font-medium text-(--brand) hover:underline">
               Dashboard → Layout
             </Link>
             .
@@ -221,7 +221,7 @@ export default function LayoutMapping() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-xl border border-slate-200 bg-white">
+        <aside className="h-fit rounded-xl border border-slate-200 bg-surface">
           <div className="border-b border-slate-100 px-4 py-2.5">
             <h3 className="text-sm font-semibold text-slate-900">Machines</h3>
             <p className="text-xs text-slate-500">
@@ -231,7 +231,7 @@ export default function LayoutMapping() {
           {machines.length === 0 ? (
             <p className="px-4 py-6 text-sm text-slate-500">
               No machines registered.{" "}
-              <Link href="/settings/machines" className="text-[#1E6FD9] hover:underline">
+              <Link href="/settings/machines" className="text-(--brand) hover:underline">
                 Register one
               </Link>
             </p>
@@ -244,7 +244,7 @@ export default function LayoutMapping() {
                   <li key={m.id}>
                     <div
                       className={`flex items-center gap-2 px-3 py-2 ${
-                        isSelected ? "bg-blue-50 ring-1 ring-[#1E6FD9] ring-inset" : "hover:bg-slate-50"
+                        isSelected ? "bg-blue-50 ring-1 ring-(--brand) ring-inset" : "hover:bg-slate-50"
                       } ${m.isActive ? "" : "opacity-60"}`}
                     >
                       <button
@@ -253,7 +253,7 @@ export default function LayoutMapping() {
                         aria-pressed={isSelected}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
-                        <MapPin size={16} className={p ? "text-[#1E6FD9]" : "text-slate-300"} />
+                        <MapPin size={16} className={p ? "text-(--brand)" : "text-slate-300"} />
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-slate-900">
                             {m.machineNo}
@@ -282,7 +282,7 @@ export default function LayoutMapping() {
           )}
         </aside>
 
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
           <p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500">
             {selected
               ? `Placing ${byId.get(selected)?.machineNo}: click its position on the layout, or drag it`
@@ -340,7 +340,7 @@ export default function LayoutMapping() {
         <div
           role="status"
           className={`fixed right-4 bottom-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
-            toast.tone === "ok" ? "bg-slate-900" : "bg-red-600"
+            toast.tone === "ok" ? "theme-fixed bg-slate-900" : "bg-red-600"
           }`}
         >
           {toast.text}

@@ -119,11 +119,11 @@ export default function ShiftManagement() {
       </div>
 
       {!shifts ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white py-16 text-sm text-slate-500">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-surface py-16 text-sm text-slate-500">
           {loadError ? (
             <>
               <p className="text-red-600">{loadError}</p>
-              <button type="button" onClick={load} className="font-medium text-[#1E6FD9] hover:underline">
+              <button type="button" onClick={load} className="font-medium text-(--brand) hover:underline">
                 Retry
               </button>
             </>
@@ -136,7 +136,7 @@ export default function ShiftManagement() {
         </div>
       ) : (
         <>
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-slate-900">24-hour coverage</h3>
               <p className="text-xs text-slate-500">
@@ -163,7 +163,7 @@ export default function ShiftManagement() {
                   key={`${p.shift.id}-${p.from}`}
                   title={`${p.shift.name} · ${p.shift.start}–${p.shift.end}`}
                   className={`absolute inset-y-0 flex items-center justify-center overflow-hidden border-r border-white/60 text-xs font-medium whitespace-nowrap text-white ${p.color} ${
-                    current?.shiftId === p.shift.id ? "ring-2 ring-[#1E3A5F] ring-inset" : ""
+                    current?.shiftId === p.shift.id ? "ring-2 ring-(--brand-ink) ring-inset" : ""
                   }`}
                   style={{ left: pct(p.from), width: pct(p.to - p.from) }}
                 >
@@ -184,7 +184,7 @@ export default function ShiftManagement() {
             </div>
           </section>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-slate-50 text-left text-xs text-slate-500">
                 <tr>
@@ -229,7 +229,7 @@ export default function ShiftManagement() {
                           <button
                             type="button"
                             onClick={() => setForm({ mode: "edit", shift: s })}
-                            className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+                            className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
                             aria-label={`Edit ${s.name}`}
                           >
                             <Pencil size={16} />
@@ -295,7 +295,7 @@ export default function ShiftManagement() {
         <div
           role="status"
           className={`fixed right-4 bottom-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
-            toast.tone === "ok" ? "bg-slate-900" : "bg-red-600"
+            toast.tone === "ok" ? "theme-fixed bg-slate-900" : "bg-red-600"
           }`}
         >
           {toast.text}

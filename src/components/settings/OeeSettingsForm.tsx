@@ -11,7 +11,7 @@ import type { FinishRule, OeeSettings } from "@/types/settings";
 
 const MAX_RULES = 10;
 const fieldCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
 
 /** Radio group shown as selectable cards. */
 function ChoiceGroup<T extends string>({ name, value, onChange, options }: {
@@ -26,7 +26,7 @@ function ChoiceGroup<T extends string>({ name, value, onChange, options }: {
         <label
           key={o.value}
           className={`flex cursor-pointer gap-2.5 rounded-lg border px-3 py-2.5 ${
-            value === o.value ? "border-[#1E6FD9] bg-blue-50/60" : "border-slate-200 hover:border-slate-300"
+            value === o.value ? "border-(--brand) bg-blue-50/60" : "border-slate-200 hover:border-slate-300"
           }`}
         >
           <input
@@ -35,7 +35,7 @@ function ChoiceGroup<T extends string>({ name, value, onChange, options }: {
             value={o.value}
             checked={value === o.value}
             onChange={() => onChange(o.value)}
-            className="mt-0.5 accent-[#1E6FD9]"
+            className="mt-0.5 accent-(--brand)"
           />
           <span>
             <span className="block text-sm font-medium text-slate-800">{o.label}</span>
@@ -89,7 +89,7 @@ export default function OeeSettingsForm() {
         {loadError ? (
           <>
             <p className="text-red-600">{loadError}</p>
-            <button type="button" onClick={load} className="font-medium text-[#1E6FD9] hover:underline">
+            <button type="button" onClick={load} className="font-medium text-(--brand) hover:underline">
               Retry
             </button>
           </>
@@ -133,7 +133,7 @@ export default function OeeSettingsForm() {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-3xl space-y-4">
-      <div className="space-y-4 rounded-xl border border-slate-200 bg-white px-5 py-4">
+      <div className="space-y-4 rounded-xl border border-slate-200 bg-surface px-5 py-4">
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-slate-700">Start counting</p>
           <ChoiceGroup
@@ -168,7 +168,7 @@ export default function OeeSettingsForm() {
         </div>
       </div>
 
-      <div className="space-y-1.5 rounded-xl border border-slate-200 bg-white px-5 py-4">
+      <div className="space-y-1.5 rounded-xl border border-slate-200 bg-surface px-5 py-4">
         <p className="text-sm font-medium text-slate-700">Reject counted in Quality</p>
         <ChoiceGroup
           name="rejectSource"
@@ -190,7 +190,7 @@ export default function OeeSettingsForm() {
         />
       </div>
 
-      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-surface">
         <ToggleRow
           label="Custom machine name"
           hint='Show the OEE machines as "Bagger" or another name instead of "Machine" on every dashboard. Display only; OEE keeps running.'
@@ -209,7 +209,7 @@ export default function OeeSettingsForm() {
                     name="machineLabel"
                     checked={selected}
                     onChange={() => set("machineLabel", custom ? "" : "Bagger")}
-                    className="accent-[#1E6FD9]"
+                    className="accent-(--brand)"
                   />
                   {choice}
                 </label>
@@ -222,7 +222,7 @@ export default function OeeSettingsForm() {
                 maxLength={30}
                 placeholder="e.g. Packer"
                 aria-label="Custom machine name"
-                className="h-9 w-48 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none"
+                className="h-9 w-48 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none"
               />
             )}
             <span className="text-xs text-slate-500">
@@ -232,7 +232,7 @@ export default function OeeSettingsForm() {
         )}
       </div>
 
-      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-surface">
         <ToggleRow
           label="Restart OEE when SKU changes"
           hint="A new SKU starts a fresh run. Only checked while the machine is not Off."
@@ -253,7 +253,7 @@ export default function OeeSettingsForm() {
         />
       </div>
 
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white px-5 py-4">
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-surface px-5 py-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <p className="text-sm font-medium text-slate-700">Finish OEE run when</p>

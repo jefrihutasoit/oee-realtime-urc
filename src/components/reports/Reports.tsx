@@ -22,10 +22,12 @@ import {
   exportReportPdf,
   formatFigures,
   reportColumns,
+  reportUnits,
   reportTypeOf,
   totalCells,
   type ReportFilterText,
 } from "@/lib/report-export";
+import { useProductionUnits } from "@/lib/production-units";
 import { todayYmd } from "@/lib/reject-sheet";
 import { shiftApi } from "@/lib/shift-api";
 import { skuApi } from "@/lib/sku-api";
@@ -52,14 +54,14 @@ const defaultFilters = (): Filters => {
 };
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
 
 function Field({ label, optional, children }: { label: string; optional?: boolean; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
       <p className="mb-1.5 text-sm font-medium text-slate-800">
         {label}
-        {optional && <span className="font-normal text-[#1E6FD9]"> (Optional)</span>}
+        {optional && <span className="font-normal text-(--brand)"> (Optional)</span>}
       </p>
       {children}
     </div>
@@ -77,6 +79,7 @@ function pageList(current: number, count: number): (number | "…")[] {
 
 export default function Reports() {
   const name = useMachineLabel();
+  const unitsOf = useProductionUnits();
   const [machines, setMachines] = useState<MachineRegistration[]>([]);
   const [skus, setSkus] = useState<SkuMaster[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -150,7 +153,7 @@ export default function Reports() {
     if (!report || !applied) return;
     setExporting(kind);
     try {
-      await (kind === "pdf" ? exportReportPdf : exportReportExcel)(report, filterText(applied), name.one);
+      await (kind === "pdf" ? exportReportPdf : exportReportExcel)(report, filterText(applied), name.one, units!);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed");
     } finally {
@@ -162,7 +165,8 @@ export default function Reports() {
   const pageCount = Math.max(1, Math.ceil(groups.length / pageSize));
   const current = Math.min(page, pageCount);
   const visible = groups.slice((current - 1) * pageSize, current * pageSize);
-  const columns = report ? reportColumns(report.type, name.one) : [];
+  const units = report ? reportUnits(report, unitsOf) : null;
+  const columns = report ? reportColumns(report.type, name.one, units!.header) : [];
   const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.key));
 
   const toggle = (key: string) =>
@@ -180,7 +184,7 @@ export default function Reports() {
       </div>
 
       {/* Filter */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-5">
+      <section className="rounded-xl border border-slate-200 bg-surface p-4 md:p-5">
         <h3 className="mb-4 text-lg font-semibold text-slate-900">Report Filter</h3>
         <form
           onSubmit={(e) => {
@@ -237,7 +241,7 @@ export default function Reports() {
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#1E6FD9] px-4 text-sm font-medium text-white hover:bg-[#185DB8] disabled:opacity-60"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-(--brand) px-4 text-sm font-medium text-white hover:bg-(--brand-hover) disabled:opacity-60"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
               Generate Report
@@ -245,7 +249,7 @@ export default function Reports() {
             <button
               type="button"
               onClick={() => setFilters(defaultFilters())}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-50 px-5 text-sm font-medium text-[#1E6FD9] hover:bg-blue-100"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-50 px-5 text-sm font-medium text-(--brand) hover:bg-blue-100"
             >
               <RotateCcw size={16} />
               Reset
@@ -256,7 +260,7 @@ export default function Reports() {
       </section>
 
       {/* Result */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-5">
+      <section className="rounded-xl border border-slate-200 bg-surface p-4 md:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">
@@ -320,7 +324,7 @@ export default function Reports() {
                           <button
                             type="button"
                             onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.key)))}
-                            className="inline-flex items-center gap-1 hover:text-[#1E6FD9]"
+                            className="inline-flex items-center gap-1 hover:text-(--brand)"
                             title={allCollapsed ? "Expand all" : "Collapse all"}
                           >
                             <ChevronDown size={14} className={allCollapsed ? "-rotate-90" : ""} />
@@ -358,7 +362,7 @@ export default function Reports() {
                               {t}
                             </td>
                           ))}
-                          {formatFigures(g.total).map((v, i) => (
+                          {formatFigures(g.total, units!.group(g)).map((v, i) => (
                             <td key={i} className="border-t border-slate-200 px-3 py-2.5 text-right tabular-nums">
                               {v}
                             </td>
@@ -371,7 +375,7 @@ export default function Reports() {
                               <td className="border-t border-slate-100 px-3 py-2">{r.machineNo}</td>
                               <td className="border-t border-slate-100 px-3 py-2 whitespace-nowrap">{r.skuCode}</td>
                               <td className="border-t border-slate-100 px-3 py-2">{r.productName}</td>
-                              {formatFigures(r).map((v, i) => (
+                              {formatFigures(r, units!.row(r)).map((v, i) => (
                                 <td key={i} className="border-t border-slate-100 px-3 py-2 text-right tabular-nums">
                                   {v}
                                 </td>
@@ -434,7 +438,7 @@ export default function Reports() {
                       setPageSize(Number(e.target.value));
                       setPage(1);
                     }}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm focus:border-blue-400 focus:outline-none"
+                    className="h-9 rounded-lg border border-slate-200 bg-surface px-2 text-sm focus:border-blue-400 focus:outline-none"
                   >
                     {PAGE_SIZES.map((s) => (
                       <option key={s} value={s}>
@@ -473,7 +477,7 @@ function PageButton({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={`flex size-9 items-center justify-center rounded-lg border text-sm tabular-nums disabled:opacity-40 ${
-        active ? "border-[#1E6FD9] bg-[#1E6FD9] font-semibold text-white" : "border-slate-200 bg-white hover:bg-slate-50"
+        active ? "border-(--brand) bg-(--brand) font-semibold text-white" : "border-slate-200 bg-surface hover:bg-slate-50"
       }`}
     >
       {children}

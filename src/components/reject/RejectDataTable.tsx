@@ -20,7 +20,7 @@ interface RejectDataTableProps {
 }
 
 const inputClass =
-  "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none";
+  "h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none";
 
 /** Uploaded and manually entered reject data of one date, optionally one shift. */
 export default function RejectDataTable({
@@ -78,7 +78,7 @@ export default function RejectDataTable({
   const columns = 7 + shownTypes.length;
 
   return (
-    <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h3 className="font-semibold text-slate-900">Reject Data</h3>
         <div className="flex flex-wrap gap-3">
@@ -164,7 +164,7 @@ export default function RejectDataTable({
                         <button
                           type="button"
                           onClick={() => onEdit(r)}
-                          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+                          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
                           aria-label={`Edit reject of ${r.machineNo}`}
                         >
                           <Pencil size={16} />

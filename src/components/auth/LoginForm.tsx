@@ -6,7 +6,7 @@ import { Loader2, LogIn } from "lucide-react";
 import { login } from "@/lib/auth";
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -32,8 +32,8 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0E1B2C] p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-xl bg-white p-6 shadow-xl">
+    <div className="theme-fixed flex min-h-screen items-center justify-center bg-[#0E1B2C] p-4">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-xl bg-surface p-6 shadow-xl">
         <div className="text-center">
           <p className="flex items-baseline justify-center gap-1.5 leading-none">
             <span className="text-2xl font-bold text-[#E4002B]">UR</span>
@@ -78,7 +78,7 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={busy}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#1E6FD9] text-sm font-medium text-white hover:bg-[#185DB8] disabled:opacity-60"
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-(--brand) text-sm font-medium text-white hover:bg-(--brand-hover) disabled:opacity-60"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
           Sign in

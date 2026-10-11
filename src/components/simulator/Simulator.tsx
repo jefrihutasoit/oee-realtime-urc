@@ -131,7 +131,7 @@ export default function Simulator() {
         {loadError ? (
           <>
             <p className="text-red-600">{loadError}</p>
-            <button type="button" onClick={load} className="font-medium text-[#1E6FD9] hover:underline">
+            <button type="button" onClick={load} className="font-medium text-(--brand) hover:underline">
               Retry
             </button>
           </>
@@ -171,7 +171,7 @@ export default function Simulator() {
               aria-label="Machine"
               value={machineFilter}
               onChange={(e) => setMachineFilter(e.target.value)}
-              className="h-10 appearance-none rounded-lg border border-slate-200 bg-white pr-9 pl-3 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+              className="h-10 appearance-none rounded-lg border border-slate-200 bg-surface pr-9 pl-3 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
             >
               <option value="ALL">All machines</option>
               {machines.map((m) => (
@@ -187,7 +187,7 @@ export default function Simulator() {
           </div>
           <Link
             href="/dashboard/machine"
-            className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-surface px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             Open dashboard
           </Link>
@@ -195,9 +195,9 @@ export default function Simulator() {
       </div>
 
       {machines.length === 0 && (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+        <p className="rounded-xl border border-dashed border-slate-300 bg-surface p-8 text-center text-sm text-slate-500">
           No machines registered.{" "}
-          <Link href="/settings/machines" className="font-medium text-[#1E6FD9] hover:underline">
+          <Link href="/settings/machines" className="font-medium text-(--brand) hover:underline">
             Register a machine
           </Link>{" "}
           to get tags to simulate.
@@ -211,7 +211,7 @@ export default function Simulator() {
               key={m.id}
               aria-disabled={!m.isActive || undefined}
               className={`overflow-hidden rounded-xl border ${
-                m.isActive ? "border-slate-200 bg-white" : "border-dashed border-slate-300 bg-slate-100"
+                m.isActive ? "border-slate-200 bg-surface" : "border-dashed border-slate-300 bg-slate-100"
               }`}
             >
               <header className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
@@ -297,7 +297,7 @@ export default function Simulator() {
                               <button
                                 type="submit"
                                 disabled={busy}
-                                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1E6FD9] px-3 text-sm font-medium text-white hover:bg-[#185DB8] disabled:opacity-60"
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-(--brand) px-3 text-sm font-medium text-white hover:bg-(--brand-hover) disabled:opacity-60"
                               >
                                 {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                                 Push
@@ -341,7 +341,7 @@ export default function Simulator() {
           ))}
         </div>
 
-        <aside className="h-fit rounded-xl border border-slate-200 bg-white">
+        <aside className="h-fit rounded-xl border border-slate-200 bg-surface">
           <h3 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Recent pushes</h3>
           {recent.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-slate-500">Nothing pushed yet.</p>
@@ -368,7 +368,7 @@ export default function Simulator() {
         <div
           role="status"
           className={`fixed right-4 bottom-4 z-50 max-w-sm rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
-            toast.tone === "ok" ? "bg-slate-900" : "bg-red-600"
+            toast.tone === "ok" ? "theme-fixed bg-slate-900" : "bg-red-600"
           }`}
         >
           {toast.text}

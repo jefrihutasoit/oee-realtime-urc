@@ -66,7 +66,7 @@ export default function MultiSelect({
             setOpen((o) => !o);
           }
         }}
-        className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white py-1 pr-2 pl-2 text-sm focus:border-blue-400 focus:outline-none"
+        className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-surface py-1 pr-2 pl-2 text-sm focus:border-blue-400 focus:outline-none"
       >
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
           {chips.length === 0 && <span className="px-1 text-slate-700">{placeholder}</span>}
@@ -91,7 +91,7 @@ export default function MultiSelect({
       </div>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full min-w-56 rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="absolute z-30 mt-1 w-full min-w-56 rounded-lg border border-slate-200 bg-surface shadow-lg">
           <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
             <Search size={14} className="text-slate-400" />
             <input
@@ -106,7 +106,7 @@ export default function MultiSelect({
             <button
               type="button"
               onClick={() => onChange([...new Set([...value, ...shown.map((o) => o.value)])])}
-              className="font-medium text-[#1E6FD9] hover:underline"
+              className="font-medium text-(--brand) hover:underline"
             >
               Select all
             </button>
@@ -125,7 +125,7 @@ export default function MultiSelect({
                 >
                   <span
                     className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                      selected.has(o.value) ? "border-[#1E6FD9] bg-[#1E6FD9] text-white" : "border-slate-300"
+                      selected.has(o.value) ? "border-(--brand) bg-(--brand) text-white" : "border-slate-300"
                     }`}
                   >
                     {selected.has(o.value) && <Check size={12} />}

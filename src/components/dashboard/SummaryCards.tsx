@@ -2,13 +2,14 @@ import { Factory, Package, X } from "lucide-react";
 import { OEE_TARGET, statusStyles } from "@/config/oee";
 import { dashboardStatus, type LiveMachine } from "@/hooks/useLiveMachines";
 import { useMachineLabel } from "@/lib/machine-label";
+import { withUnit } from "@/lib/production-units";
 import type { LiveStatus } from "@/types/oee";
 
 const fmt = new Intl.NumberFormat("en-US");
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 ${className}`}>
+    <div className={`flex items-center gap-3 rounded-xl border border-slate-200 bg-surface px-4 py-3 ${className}`}>
       {children}
     </div>
   );
@@ -28,7 +29,7 @@ function OeeRing({ value }: { value: number }) {
   const c = 2 * Math.PI * r;
   return (
     <svg viewBox="0 0 44 44" className="size-11 shrink-0 -rotate-90" aria-hidden>
-      <circle cx="22" cy="22" r={r} fill="none" stroke="#E2E8F0" strokeWidth="5" />
+      <circle cx="22" cy="22" r={r} fill="none" style={{ stroke: "var(--color-slate-200)" }} strokeWidth="5" />
       <circle
         cx="22"
         cy="22"
@@ -55,12 +56,17 @@ export default function SummaryCards({ machines }: { machines: LiveMachine[] }) 
   const avgOee = counted.length ? counted.reduce((s, m) => s + m.oee, 0) / counted.length : 0;
   const output = live.reduce((s, m) => s + m.output, 0);
   const reject = live.reduce((s, m) => s + m.reject, 0);
+  // A total shows a unit only when every machine in it uses the same one.
+  const withLive = active.filter((m) => m.live);
+  const common = (units: string[]) => (units.length && units.every((u) => u === units[0]) ? units[0] : "");
+  const outputUnit = common(withLive.map((m) => m.outputUnit));
+  const rejectUnit = common(withLive.map((m) => m.rejectUnit));
   const count = (st: LiveStatus) => active.filter((m) => dashboardStatus(m.status) === st).length;
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.4fr_1.3fr_1.3fr_1.6fr]">
       <Card>
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#1E6FD9]">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-(--brand)">
           <Factory size={24} />
         </span>
         <Metric
@@ -80,17 +86,17 @@ export default function SummaryCards({ machines }: { machines: LiveMachine[] }) 
       </Card>
 
       <Card>
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#1E6FD9]">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-(--brand)">
           <Package size={24} />
         </span>
-        <Metric value={`${fmt.format(output)} pcs`} label="Total Output (Shift)" />
+        <Metric value={withUnit(fmt.format(output), outputUnit)} label="Total Output (Shift)" />
       </Card>
 
       <Card>
         <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
           <X size={24} strokeWidth={3} />
         </span>
-        <Metric value={`${fmt.format(reject)} pcs`} label="Total Reject (Shift)" />
+        <Metric value={withUnit(fmt.format(reject), rejectUnit)} label="Total Reject (Shift)" />
       </Card>
 
       <Card className="justify-around divide-x divide-slate-200 sm:col-span-2 xl:col-span-1">

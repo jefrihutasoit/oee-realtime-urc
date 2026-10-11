@@ -24,8 +24,11 @@ const INCLUDED = [
   "Status definition",
   "3D layout machine positions",
   "Reject types",
+  "Gateway settings (HTTP / MQTT, incl. API key and MQTT password: keep the file safe)",
+  "Theme",
 ];
-const EXCLUDED = "Production history, tag values, reject data, uploaded photos and the layout image";
+const EXCLUDED =
+  "Production history, tag values, reject data, uploaded photos, the layout image, and the database connection (it belongs to the server)";
 
 export default function SettingsBackup() {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -116,9 +119,9 @@ export default function SettingsBackup() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
           <div className="flex items-start gap-3">
-            <DatabaseBackup size={22} className="mt-0.5 shrink-0 text-[#1E6FD9]" />
+            <DatabaseBackup size={22} className="mt-0.5 shrink-0 text-(--brand)" />
             <div>
               <h3 className="font-semibold text-slate-900">Export Settings</h3>
               <p className="text-sm text-slate-500">One Excel file with a sheet per section:</p>
@@ -137,7 +140,7 @@ export default function SettingsBackup() {
           </button>
         </section>
 
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
           <div className="flex items-start gap-3">
             <RotateCcw size={22} className="mt-0.5 shrink-0 text-amber-600" />
             <div>
@@ -184,7 +187,7 @@ export default function SettingsBackup() {
       </div>
 
       {(checking || errors.length > 0 || check || restoreError) && (
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
           <h3 className="font-semibold text-slate-900">Backup Check</h3>
 
           {checking ? (
@@ -303,7 +306,7 @@ export default function SettingsBackup() {
       {toast && (
         <div
           role="status"
-          className="fixed right-4 bottom-4 z-50 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
+          className="fixed right-4 bottom-4 z-50 theme-fixed rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
         >
           {toast}
         </div>

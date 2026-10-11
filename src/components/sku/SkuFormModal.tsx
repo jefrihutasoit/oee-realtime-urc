@@ -14,7 +14,7 @@ interface SkuFormModalProps {
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none aria-invalid:border-red-400";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none aria-invalid:border-red-400";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const SKU_ID_PATTERN = /^[A-Za-z0-9]*$/;

@@ -9,7 +9,7 @@
  */
 export type ReportType = "daily" | "shift" | "machine" | "sku";
 
-/** Output and reject in pcs; OEE figures in percent, null when no time was counted. */
+/** Output and reject counts (unit per machine: MachineRegistration.outputUnit / rejectUnit); OEE figures in percent, null when no time was counted. */
 export interface ReportFigures {
   output: number;
   reject: number;

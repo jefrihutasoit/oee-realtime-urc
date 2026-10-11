@@ -21,13 +21,13 @@ export default function Modal({ title, onClose, children, footer, size = "lg" }:
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[90vh] w-full flex-col rounded-xl bg-white shadow-xl ${sizes[size]}`}
+        className={`flex max-h-[90vh] w-full flex-col rounded-xl bg-surface shadow-xl ${sizes[size]}`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
           <h2 className="text-base font-semibold text-slate-900">{title}</h2>
@@ -49,9 +49,9 @@ export default function Modal({ title, onClose, children, footer, size = "lg" }:
 
 export const buttonStyles = {
   primary:
-    "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#1E6FD9] px-4 text-sm font-medium text-white hover:bg-[#185DB8] disabled:opacity-60",
+    "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-(--brand) px-4 text-sm font-medium text-white hover:bg-(--brand-hover) disabled:opacity-60",
   secondary:
-    "inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60",
+    "inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-surface px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60",
   danger:
     "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60",
 };

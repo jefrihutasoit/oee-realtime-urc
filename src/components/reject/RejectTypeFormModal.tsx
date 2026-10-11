@@ -14,7 +14,7 @@ interface RejectTypeFormModalProps {
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none";
 
 export default function RejectTypeFormModal({ rejectType, nextOrder, onClose, onSubmit }: RejectTypeFormModalProps) {
   const [name, setName] = useState(rejectType?.name ?? "");

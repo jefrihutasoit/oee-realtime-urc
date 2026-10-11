@@ -2,6 +2,8 @@ import type { WorkBook, WorkSheet } from "xlsx";
 import { formatFinishRules, parseFinishRules } from "@/lib/finish-rules";
 import { MANAGED_ROLES, type ManagedRole, type RolePermissions } from "@/types/auth";
 import { BACKUP_VERSION, type BackupMachine, type SettingsBackup } from "@/types/backup";
+import type { GatewaySettings } from "@/types/gateway";
+import type { AppearanceSettings } from "@/types/system";
 import type { MachineStatus } from "@/types/oee";
 
 /**
@@ -23,6 +25,8 @@ const SHEETS = {
   roles: "Role Permissions",
   markers: "Layout Markers",
   rejectTypes: "Reject Types",
+  gateway: "Gateway",
+  theme: "Theme",
 } as const;
 
 const MACHINE_COLUMNS = [
@@ -32,6 +36,10 @@ const MACHINE_COLUMNS = [
   "Tag Output",
   "Tag Reject",
   "Tag Product",
+  "Output Unit",
+  "Reject Unit",
+  "Realtime Mode",
+  "Adaptive Expiry (min)",
   "Active",
   "OEE Enabled",
   "Photo",
@@ -76,20 +84,24 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
         m.tagOutput,
         m.tagReject,
         m.tagProduct,
+        m.outputUnit,
+        m.rejectUnit,
+        m.realtimeMode,
+        m.adaptiveTtlMinutes,
         m.isActive,
         m.oeeEnabled,
         m.photo,
       ]),
     ],
-    [11, 24, 28, 28, 28, 28, 8, 12, 30]
+    [11, 24, 28, 28, 28, 28, 12, 12, 14, 20, 8, 12, 30]
   );
   add(
     SHEETS.tags,
     [
-      ["Machine No", "Name", "Tag Name"],
-      ...backup.machines.flatMap((m) => m.monitoringTags.map((t) => [m.machineNo, t.name, t.tagName])),
+      ["Machine No", "Name", "Tag Name", "Unit"],
+      ...backup.machines.flatMap((m) => m.monitoringTags.map((t) => [m.machineNo, t.name, t.tagName, t.unit])),
     ],
-    [11, 26, 32]
+    [11, 26, 32, 10]
   );
   add(
     SHEETS.skus,
@@ -147,8 +159,43 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
     [["Name", "Order"], ...backup.rejectTypes.map((t) => [t.name, t.sortOrder])],
     [28, 8]
   );
+  const g = backup.gatewaySettings;
+  if (g) {
+    add(SHEETS.gateway, [["Setting", "Value"], ...GATEWAY_ROWS.map(([label, read]) => [label, read(g)])], [26, 50]);
+  }
+  if (backup.appearance) {
+    add(
+      SHEETS.theme,
+      [
+        ["Setting", "Value"],
+        ["Mode", backup.appearance.mode],
+        ["Accent", backup.appearance.accent],
+      ],
+      [14, 14]
+    );
+  }
   return wb;
 }
+
+/** Gateway sheet rows: label, value in the backup. The API key and MQTT password are included. */
+const GATEWAY_ROWS: [string, (g: GatewaySettings) => Cell][] = [
+  ["HTTP Enabled", (g) => g.http.enabled],
+  ["HTTP Ingest Port", (g) => g.http.port],
+  ["API Key", (g) => g.http.apiKey],
+  ["MQTT Enabled", (g) => g.mqtt.enabled],
+  ["MQTT Mode", (g) => g.mqtt.mode],
+  ["Built-in Broker Port", (g) => g.mqtt.builtinPort],
+  ["Broker URL", (g) => g.mqtt.brokerUrl],
+  ["MQTT Username", (g) => g.mqtt.username],
+  ["MQTT Password", (g) => g.mqtt.password],
+  ["MQTT Client ID", (g) => g.mqtt.clientId],
+  ["MQTT Topic", (g) => g.mqtt.topic],
+  ["MQTT QoS", (g) => g.mqtt.qos],
+  ["Store On Change Only", (g) => g.storage.onChangeOnly],
+  ["Monitoring Interval (s)", (g) => g.storage.monitoringIntervalSec],
+  ["Write Interval (ms)", (g) => g.storage.flushIntervalMs],
+  ["Timestamp Source", (g) => g.storage.timestampSource],
+];
 
 export async function downloadBackup(backup: SettingsBackup) {
   const XLSX = await import("xlsx");
@@ -182,10 +229,11 @@ function readRows(XLSX: typeof import("xlsx"), wb: WorkBook, name: string, requi
     errors.push(`Sheet "${name}": column ${missing.join(", ")} not found in the first row`);
     return [];
   }
+  const has = (col: string) => header.includes(headerKey(col));
   return grid.slice(1).flatMap((row, i) => {
     if (row.every((c) => text(c) === "")) return [];
     const get = (col: string) => row[header.indexOf(headerKey(col))] ?? null;
-    return [{ rowNumber: i + 2, get }];
+    return [{ rowNumber: i + 2, get, has }];
   });
 }
 
@@ -235,6 +283,20 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
     return { backup: null, errors: ["The file is not a readable Excel workbook"] };
   }
 
+  // Neither the Info nor the Machines sheet: some other workbook was chosen.
+  const has = (name: string) => wb.SheetNames.some((n) => headerKey(n) === headerKey(name));
+  if (!has(SHEETS.info) && !has(SHEETS.machines)) {
+    const sheets = wb.SheetNames.slice(0, 5).join(", ") + (wb.SheetNames.length > 5 ? ", …" : "");
+    return {
+      backup: null,
+      errors: [
+        `"${file.name}" is not a settings backup (its sheets: ${sheets}). Choose a file named ` +
+          `oee-settings-backup-….xlsx, made with Download Backup. A database backup (oee-db-backup-….jsonl.gz) ` +
+          `is restored in the Database tab.`,
+      ],
+    };
+  }
+
   // Info: version and export time
   const infoSheet = wb.Sheets[SHEETS.info];
   const info = new Map<string, Cell>();
@@ -248,7 +310,7 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
   const machineByNo = new Map<string, BackupMachine>();
   /** First machine row, for the per-machine OEE columns of older backups. */
   let firstMachine: ((col: string) => Cell) | null = null;
-  for (const { rowNumber, get } of readRows(XLSX, wb, SHEETS.machines, [...MACHINE_COLUMNS.slice(0, 6)], errors)) {
+  for (const { rowNumber, get, has } of readRows(XLSX, wb, SHEETS.machines, [...MACHINE_COLUMNS.slice(0, 6)], errors)) {
     const at = (col: string) => `${SHEETS.machines} row ${rowNumber}: ${col}`;
     firstMachine ??= get;
     const optionalBool = (col: string, fallback: boolean) =>
@@ -260,6 +322,15 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
       tagOutput: text(get("Tag Output")),
       tagReject: text(get("Tag Reject")),
       tagProduct: text(get("Tag Product")),
+      // Older backups have no unit columns: "pcs". An empty cell means no unit.
+      outputUnit: has("Output Unit") ? text(get("Output Unit")) : "pcs",
+      rejectUnit: has("Reject Unit") ? text(get("Reject Unit")) : "pcs",
+      // Older backups have no realtime columns: registered tags, 8 h expiry.
+      realtimeMode: ((has("Realtime Mode") && text(get("Realtime Mode")).toLowerCase()) || "registered") as BackupMachine["realtimeMode"],
+      adaptiveTtlMinutes:
+        has("Adaptive Expiry (min)") && text(get("Adaptive Expiry (min)")) !== ""
+          ? num(get("Adaptive Expiry (min)"), at("Adaptive Expiry (min)"), errors)
+          : 480,
       isActive: optionalBool("Active", true),
       oeeEnabled: optionalBool("OEE Enabled", true),
       photo: text(get("Photo")) || null,
@@ -273,7 +344,7 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
     const machineNo = text(get("Machine No"));
     const machine = machineByNo.get(machineNo.toLowerCase());
     if (!machine) errors.push(`${SHEETS.tags} row ${rowNumber}: machine "${machineNo}" is not in the Machines sheet`);
-    else machine.monitoringTags.push({ name: text(get("Name")), tagName: text(get("Tag Name")) });
+    else machine.monitoringTags.push({ name: text(get("Name")), tagName: text(get("Tag Name")), unit: text(get("Unit")) });
   }
 
   const skus = readRows(XLSX, wb, SHEETS.skus, ["SKU ID", "Product Name", "SKU", "Output Per Minute"], errors).map(
@@ -387,6 +458,62 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
     })
   );
 
+  // Gateway and theme (optional: older backups keep the current ones). The backend validates the values.
+  const settingRows = (sheet: string) => {
+    if (!wb.Sheets[sheet]) return null;
+    const map = new Map<string, { value: Cell; where: string }>();
+    for (const { rowNumber, get } of readRows(XLSX, wb, sheet, ["Setting", "Value"], errors)) {
+      map.set(headerKey(text(get("Setting"))), { value: get("Value"), where: `${sheet} row ${rowNumber}` });
+    }
+    return map;
+  };
+  let gatewaySettings: GatewaySettings | undefined;
+  const gw = settingRows(SHEETS.gateway);
+  if (gw) {
+    const cell = (label: string) => gw.get(headerKey(label));
+    const t = (label: string) => text(cell(label)?.value ?? null);
+    const b = (label: string, fallback: boolean) => {
+      const c = cell(label);
+      return !c || text(c.value) === "" ? fallback : bool(c.value, `${c.where}: Value`, errors);
+    };
+    const n = (label: string, fallback: number) => {
+      const c = cell(label);
+      return !c || text(c.value) === "" ? fallback : num(c.value, `${c.where}: Value`, errors);
+    };
+    gatewaySettings = {
+      http: {
+        enabled: b("HTTP Enabled", true),
+        port: t("HTTP Ingest Port") === "" ? null : n("HTTP Ingest Port", 0),
+        apiKey: t("API Key"),
+      },
+      mqtt: {
+        enabled: b("MQTT Enabled", false),
+        mode: (t("MQTT Mode").toLowerCase() || "builtin") as GatewaySettings["mqtt"]["mode"],
+        builtinPort: n("Built-in Broker Port", 1883),
+        brokerUrl: t("Broker URL"),
+        username: t("MQTT Username"),
+        password: t("MQTT Password"),
+        clientId: t("MQTT Client ID"),
+        topic: t("MQTT Topic"),
+        qos: n("MQTT QoS", 1) as GatewaySettings["mqtt"]["qos"],
+      },
+      storage: {
+        onChangeOnly: b("Store On Change Only", true),
+        monitoringIntervalSec: n("Monitoring Interval (s)", 10),
+        flushIntervalMs: n("Write Interval (ms)", 1000),
+        timestampSource: (t("Timestamp Source").toLowerCase() || "server") as GatewaySettings["storage"]["timestampSource"],
+      },
+    };
+  }
+  let appearance: AppearanceSettings | undefined;
+  const th = settingRows(SHEETS.theme);
+  if (th) {
+    appearance = {
+      mode: (text(th.get(headerKey("Mode"))?.value ?? null).toLowerCase() || "light") as AppearanceSettings["mode"],
+      accent: (text(th.get(headerKey("Accent"))?.value ?? null).toLowerCase() || "blue") as AppearanceSettings["accent"],
+    };
+  }
+
   const version = Number(info.get("version"));
   if (infoSheet && version !== BACKUP_VERSION) {
     errors.push(`Backup version ${text(info.get("version")) || "(empty)"} is not supported (expected ${BACKUP_VERSION})`);
@@ -404,6 +531,8 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
       rolePermissions,
       layoutMarkers,
       rejectTypes,
+      gatewaySettings,
+      appearance,
     },
     errors,
   };

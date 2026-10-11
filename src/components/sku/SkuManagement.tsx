@@ -100,13 +100,13 @@ export default function SkuManagement() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search SKU ID, product, or SKU..."
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white pr-3 pl-9 text-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-surface pr-3 pl-9 text-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none"
           />
         </div>
         <p className="text-sm text-slate-500">{skus.length} SKU registered</p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr>
@@ -136,7 +136,7 @@ export default function SkuManagement() {
                       setLoading(true);
                       load();
                     }}
-                    className="ml-2 font-medium text-[#1E6FD9] hover:underline"
+                    className="ml-2 font-medium text-(--brand) hover:underline"
                   >
                     Retry
                   </button>
@@ -172,7 +172,7 @@ export default function SkuManagement() {
                         <button
                           type="button"
                           onClick={() => setForm({ mode: "edit", sku: s })}
-                          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+                          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
                           aria-label={`Edit SKU ${s.skuId}`}
                         >
                           <Pencil size={16} />
@@ -237,7 +237,7 @@ export default function SkuManagement() {
         <div
           role="status"
           className={`fixed right-4 bottom-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
-            toast.tone === "ok" ? "bg-slate-900" : "bg-red-600"
+            toast.tone === "ok" ? "theme-fixed bg-slate-900" : "bg-red-600"
           }`}
         >
           {toast.text}

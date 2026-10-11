@@ -4,8 +4,15 @@ import { useMemo, useRef, useState } from "react";
 import { ImagePlus, Loader2, Plus, Trash2 } from "lucide-react";
 import Modal, { buttonStyles } from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
+import { REALTIME_MODES, TtlSelect } from "@/lib/realtime-mode";
 import { fileToResizedDataUrl } from "@/lib/image";
-import type { GatewayTag, MachineInput, MachineRegistration, ProductionTagKey } from "@/types/machine";
+import type {
+  GatewayTag,
+  MachineInput,
+  MachineRegistration,
+  ProductionTagKey,
+  ProductionUnitKey,
+} from "@/types/machine";
 
 interface MachineFormModalProps {
   machine?: MachineRegistration;
@@ -16,18 +23,18 @@ interface MachineFormModalProps {
 
 type GeneralFields = Omit<MachineInput, "monitoringTags">;
 /** `key` is a client-only row key; `id` is set for rows that already exist on the server. */
-type MonitoringRow = { key: number; id?: string; name: string; tagName: string };
+type MonitoringRow = { key: number; id?: string; name: string; tagName: string; unit: string };
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none";
+  "h-10 w-full rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const TAG_LIST_ID = "gateway-tag-options";
 
-const productionTags: { key: ProductionTagKey; label: string; hint: string }[] = [
+const productionTags: { key: ProductionTagKey; label: string; hint: string; unitKey?: ProductionUnitKey }[] = [
   { key: "tagStatus", label: "Tag Status", hint: "Run / stop / off state" },
-  { key: "tagOutput", label: "Tag Output", hint: "Good output counter" },
-  { key: "tagReject", label: "Tag Reject", hint: "Reject counter" },
+  { key: "tagOutput", label: "Tag Output", hint: "Good output counter", unitKey: "outputUnit" },
+  { key: "tagReject", label: "Tag Reject", hint: "Reject counter", unitKey: "rejectUnit" },
   { key: "tagProduct", label: "Tag Product", hint: "Active product / SKU code" },
 ];
 
@@ -92,6 +99,10 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
     tagOutput: machine?.tagOutput ?? "",
     tagReject: machine?.tagReject ?? "",
     tagProduct: machine?.tagProduct ?? "",
+    outputUnit: machine?.outputUnit ?? "pcs",
+    rejectUnit: machine?.rejectUnit ?? "pcs",
+    realtimeMode: machine?.realtimeMode ?? "registered",
+    adaptiveTtlMinutes: machine?.adaptiveTtlMinutes ?? 480,
     photo: machine?.photo ?? null,
     isActive: machine?.isActive ?? true,
     oeeEnabled: machine?.oeeEnabled ?? true,
@@ -138,7 +149,7 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
 
     const monitoringTags = rows
       .filter((r) => r.name.trim() || r.tagName.trim())
-      .map(({ id, name, tagName }) => ({ id, name, tagName }));
+      .map(({ id, name, tagName, unit }) => ({ id, name, tagName, unit }));
 
     setSaving(true);
     setError(null);
@@ -266,19 +277,74 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
                   {t.label}
                   <span className="block text-xs font-normal text-slate-500">{t.hint}</span>
                 </label>
-                <TagInput id={t.key} value={form[t.key]} onChange={(v) => set(t.key, v)} tagMap={tagMap} />
+                <div className={t.unitKey ? "grid grid-cols-[1fr_96px] items-start gap-2" : undefined}>
+                  <TagInput id={t.key} value={form[t.key]} onChange={(v) => set(t.key, v)} tagMap={tagMap} />
+                  {t.unitKey && (
+                    <input
+                      value={form[t.unitKey]}
+                      onChange={(e) => set(t.unitKey!, e.target.value)}
+                      placeholder="Unit"
+                      title="Unit shown with this counter, e.g. pcs"
+                      aria-label={`${t.label} unit`}
+                      maxLength={20}
+                      className={inputCls}
+                    />
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </Section>
 
+        <Section title="Realtime Tags" description="Where the values on the machine's realtime view come from.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {REALTIME_MODES.map((m) => (
+              <label
+                key={m.value}
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border-2 p-3 text-sm ${
+                  form.realtimeMode === m.value ? "border-(--brand)" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="realtimeMode"
+                  checked={form.realtimeMode === m.value}
+                  onChange={() => set("realtimeMode", m.value)}
+                  className="mt-0.5 size-4 accent-(--brand)"
+                />
+                <span>
+                  <span className="font-medium text-slate-800">{m.label}</span>
+                  <span className="block text-xs text-slate-500">{m.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {form.realtimeMode === "adaptive" && (
+            <div className="grid gap-1.5 sm:grid-cols-[220px_1fr] sm:items-center">
+              <label htmlFor="adaptiveTtl" className="text-sm font-medium text-slate-700">
+                Remove a tag when not published for
+              </label>
+              <TtlSelect
+                id="adaptiveTtl"
+                value={form.adaptiveTtlMinutes}
+                onChange={(v) => set("adaptiveTtlMinutes", v)}
+                className={inputCls}
+              />
+            </div>
+          )}
+        </Section>
+
         <Section
           title={`Realtime Monitoring Tags (${rows.length})`}
-          description="Extra values shown on the machine's realtime view, e.g. speed or seal temperature."
+          description={
+            form.realtimeMode === "adaptive"
+              ? "Kept, but not shown while the machine uses adaptive tags."
+              : "Extra values shown on the machine's realtime view, e.g. speed or seal temperature."
+          }
           action={
             <button
               type="button"
-              onClick={() => setRows((list) => [...list, { key: ++rowSeq, name: "", tagName: "" }])}
+              onClick={() => setRows((list) => [...list, { key: ++rowSeq, name: "", tagName: "", unit: "" }])}
               className={buttonStyles.secondary}
             >
               <Plus size={16} />
@@ -292,14 +358,15 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
             </p>
           ) : (
             <div className="space-y-2">
-              <div className="hidden grid-cols-[1fr_1.5fr_36px] gap-2 text-xs font-medium text-slate-500 sm:grid">
+              <div className="hidden grid-cols-[1fr_1.5fr_96px_36px] gap-2 text-xs font-medium text-slate-500 sm:grid">
                 <span>Name</span>
                 <span>Tag Name</span>
+                <span>Unit</span>
               </div>
               {rows.map((r, i) => (
                 <div
                   key={r.key}
-                  className="grid grid-cols-[1fr_36px] items-start gap-2 rounded-lg border border-slate-100 p-2 sm:grid-cols-[1fr_1.5fr_36px] sm:border-0 sm:p-0"
+                  className="grid grid-cols-[1fr_96px_36px] items-start gap-2 rounded-lg border border-slate-100 p-2 sm:grid-cols-[1fr_1.5fr_96px_36px] sm:border-0 sm:p-0"
                 >
                   <input
                     value={r.name}
@@ -308,7 +375,7 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
                     aria-label={`Monitoring tag ${i + 1} name`}
                     className={inputCls}
                   />
-                  <div className="col-start-1 row-start-2 sm:col-start-auto sm:row-start-auto">
+                  <div className="col-span-3 col-start-1 row-start-2 sm:col-span-1 sm:col-start-auto sm:row-start-auto">
                     <TagInput
                       value={r.tagName}
                       onChange={(v) => updateRow(r.key, { tagName: v })}
@@ -316,10 +383,18 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
                       label={`Monitoring tag ${i + 1} tag name`}
                     />
                   </div>
+                  <input
+                    value={r.unit}
+                    onChange={(e) => updateRow(r.key, { unit: e.target.value })}
+                    placeholder="e.g. °C"
+                    aria-label={`Monitoring tag ${i + 1} unit`}
+                    maxLength={20}
+                    className={`${inputCls} col-start-2 row-start-1 sm:col-start-auto sm:row-start-auto`}
+                  />
                   <button
                     type="button"
                     onClick={() => setRows((list) => list.filter((x) => x.key !== r.key))}
-                    className="col-start-2 row-start-1 flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
+                    className="col-start-3 row-start-1 flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-red-50 hover:text-red-600 sm:col-start-auto sm:row-start-auto"
                     aria-label={`Remove monitoring tag ${i + 1}`}
                   >
                     <Trash2 size={16} />

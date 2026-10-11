@@ -21,7 +21,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const now = useNow();
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 md:px-5">
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-surface px-4 md:px-5">
       <button
         type="button"
         onClick={onMenuClick}

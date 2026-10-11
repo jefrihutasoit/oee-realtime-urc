@@ -52,7 +52,7 @@ function RolePermissionsEditor({ data, onSaved }: { data: RolesResponse; onSaved
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white">
+    <section className="rounded-xl border border-slate-200 bg-surface">
       <div className="flex flex-wrap items-end justify-between gap-3 p-4">
         <div>
           <h3 className="font-semibold text-slate-900">Role Permissions</h3>
@@ -107,7 +107,7 @@ function RolePermissionsEditor({ data, onSaved }: { data: RolesResponse; onSaved
                           onChange={() => toggle(r, p.key)}
                           aria-label={`${ROLE_LABELS[r]}: ${p.label}`}
                           title={fixed ? "Admin always keeps user management" : undefined}
-                          className="size-4 accent-[#1E6FD9]"
+                          className="size-4 accent-(--brand)"
                         />
                       </td>
                     );
@@ -179,7 +179,7 @@ export default function UserManagement() {
       </div>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr>
@@ -222,7 +222,7 @@ export default function UserManagement() {
                       <button
                         type="button"
                         onClick={() => setForm({ mode: "edit", user: u })}
-                        className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1E6FD9]"
+                        className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-(--brand)"
                         aria-label={`Edit ${u.name}`}
                       >
                         <Pencil size={16} />
