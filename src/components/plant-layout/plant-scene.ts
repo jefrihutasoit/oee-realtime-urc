@@ -1,12 +1,14 @@
 ﻿import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRAWING, PLANT_MODEL, PLANT_WIDTH_M, type PlantPart, type Point, type Rect } from "@/config/plant-model";
+import type { LayoutIndicator, LayoutView } from "@/types/layout";
 
 /** A machine placed on the layout; x/y are fractions of the drawing (DRAWING width / height). */
 export interface PlacedMachine {
   id: string;
   x: number;
   y: number;
-  /** Status colour of the lamp and floor ring. */
+  /** Status colour of the lamp and its ring or LED. */
   color: string;
   status: "RUN" | "STOP" | "OFF" | "BREAKDOWN" | "NONE";
   dim: boolean;
@@ -14,7 +16,9 @@ export interface PlacedMachine {
 
 /** Units further than this from a marker (in drawing pixels) are not matched to it. */
 const SNAP_PX = 45;
-/** Fixed camera: degrees above the floor, and to the left of straight-on. */
+/** Pointer travel (px) above which a press counts as a camera drag, not a click. */
+const CLICK_SLOP_PX = 5;
+/** Automatic camera: degrees above the floor, and to the left of straight-on. */
 const ELEVATION = 50;
 const AZIMUTH = -9;
 
@@ -30,18 +34,43 @@ interface Unit {
   andon?: Andon;
 }
 
+interface Led {
+  core: THREE.MeshStandardMaterial;
+  halo: THREE.Sprite;
+  pool: THREE.MeshBasicMaterial;
+  /** Halo size at rest, in metres. */
+  size: number;
+}
+
+/** Height of a free-standing LED dot above the floor, in metres. */
+const LED_HEIGHT = 1.4;
+
 interface MachineMark {
   anchor: THREE.Vector3;
-  andon: Andon;
-  ring: THREE.Mesh;
+  andon?: Andon;
+  ring?: THREE.Mesh;
+  led?: Led;
   status: PlacedMachine["status"];
   dim: boolean;
 }
 
 const LAMP = { red: "#ef4444", amber: "#f59e0b", green: "#22c55e" };
 
+/** Loads an uploaded layout image for the scene; null when there is none or it cannot be loaded. */
+export function loadLayoutImage(src: string | null): Promise<HTMLImageElement | null> {
+  if (!src) return Promise.resolve(null);
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = src;
+  return img.decode().then(
+    () => img,
+    () => null
+  );
+}
+
 /**
- * Three.js view of the plant from a fixed camera: the estimated equipment from PLANT_MODEL on a white floor,
+ * Three.js view of the plant (drag to rotate, right-drag to pan, scroll to zoom): the estimated equipment from PLANT_MODEL on a white floor,
+ * or, when a layout image is given, that image as the floor (markers then get free-standing stack lights),
  * with each placed machine's stack light showing its status. HTML labels registered in `machineLabels`
  * (by machine id) are moved to follow the scene every frame.
  */
@@ -50,6 +79,8 @@ export class PlantScene {
   readonly machineLabels = new Map<string, HTMLElement>();
   onHover?: (machineId: string | null) => void;
   onSelect?: (machineId: string) => void;
+  /** When set, a drag that starts on a machine is left to the page (to move it) instead of moving the camera. */
+  machinesDraggable = false;
 
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -57,11 +88,15 @@ export class PlantScene {
   private frame = 0;
   private clock = new THREE.Clock();
   private readonly floorW = PLANT_WIDTH_M;
-  private readonly floorD = PLANT_WIDTH_M * (DRAWING.height / DRAWING.width);
+  private readonly floorD: number;
   private model = new THREE.Group();
   private marks = new THREE.Group();
   private units = new Map<string, Unit>();
   private machines = new Map<string, MachineMark>();
+  private placed: PlacedMachine[] = [];
+  private indicator: LayoutIndicator = "ring";
+  private markerScale = 1;
+  private glow: THREE.CanvasTexture | null = null;
   /** Unit ids a machine is placed on; each unit takes at most one machine. */
   private takenUnits = new Set<string>();
   private hitMeshes: THREE.Mesh[] = [];
@@ -71,6 +106,12 @@ export class PlantScene {
   private pointer = new THREE.Vector2();
   private floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private resizeObserver: ResizeObserver;
+  private controls: OrbitControls;
+  /** View that resetView() returns to; null fits the whole floor. */
+  private homeView: LayoutView | null = null;
+  /** Once the user moves the camera, resizes keep their view. */
+  private userMoved = false;
+  private downAt: { x: number; y: number } | null = null;
   private geo = {
     box: new THREE.BoxGeometry(1, 1, 1),
     cyl: new THREE.CylinderGeometry(1, 1, 1, 24),
@@ -90,7 +131,12 @@ export class PlantScene {
     hit: new THREE.MeshBasicMaterial({ visible: false }),
   };
 
-  constructor(private container: HTMLElement) {
+  constructor(
+    private container: HTMLElement,
+    image: HTMLImageElement | null = null
+  ) {
+    const aspect = image ? image.naturalHeight / image.naturalWidth : DRAWING.height / DRAWING.width;
+    this.floorD = PLANT_WIDTH_M * aspect;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -111,7 +157,8 @@ export class PlantScene {
     this.scene.add(sun, this.model, this.marks);
 
     this.buildFloor();
-    for (const part of PLANT_MODEL) this.addPart(part);
+    if (image) this.buildImageFloor(image);
+    else for (const part of PLANT_MODEL) this.addPart(part);
     this.model.traverse((o) => {
       if (o instanceof THREE.Mesh && o.material !== this.mats.zone) {
         o.castShadow = true;
@@ -120,6 +167,20 @@ export class PlantScene {
     });
 
     const canvas = this.renderer.domElement;
+    // Capture phase, so it runs before OrbitControls sees the press.
+    canvas.addEventListener("pointerdown", this.onPointerDown, true);
+    window.addEventListener("pointerup", this.onPointerUp);
+    this.controls = new OrbitControls(this.camera, canvas);
+    Object.assign(this.controls, {
+      enableDamping: true,
+      dampingFactor: 0.12,
+      screenSpacePanning: false,
+      minDistance: 8,
+      maxDistance: 400,
+      maxPolarAngle: THREE.MathUtils.degToRad(85),
+    });
+    this.controls.addEventListener("start", () => (this.userMoved = true));
+    this.setDragMode(PlantScene.dragMode);
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerleave", this.onPointerLeave);
     canvas.addEventListener("click", this.onClick);
@@ -179,6 +240,18 @@ export class PlantScene {
     slab.position.y = -0.7;
     slab.receiveShadow = true;
     this.scene.add(slab);
+  }
+
+  /** The uploaded layout drawn on the floor, top of the image at the far side. */
+  private buildImageFloor(image: HTMLImageElement) {
+    const texture = new THREE.Texture(image);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    texture.needsUpdate = true;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(this.floorW, this.floorD), new THREE.MeshBasicMaterial({ map: texture }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0.01;
+    this.scene.add(floor);
   }
 
   private andon(x: number, z: number, base: number): Andon {
@@ -395,13 +468,32 @@ export class PlantScene {
     return best;
   }
 
-  /** Places the machines: on the unit under their marker, or as a free-standing stack light. */
+  /** How status is shown from now on; redraws the placed machines. */
+  setIndicator(indicator: LayoutIndicator) {
+    if (indicator === this.indicator) return;
+    this.indicator = indicator;
+    this.setMachines(this.placed);
+  }
+
+  /** Scale of the status symbols (1 = normal); smaller keeps neighbours from overlapping. */
+  setMarkerScale(scale: number) {
+    if (scale === this.markerScale) return;
+    this.markerScale = scale;
+    this.setMachines(this.placed);
+  }
+
+  /**
+   * Places the machines on the unit under their marker, or free-standing: a pole with a stack light
+   * (ring indicator) or a floating LED dot (LED indicator).
+   */
   setMachines(list: PlacedMachine[]) {
+    this.placed = list;
     for (const child of [...this.marks.children]) {
       this.marks.remove(child);
       child.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          if (o.geometry !== this.geo.box && o.geometry !== this.geo.cyl) o.geometry.dispose();
+        if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
+          // Sprites share one geometry inside three.js; it must not be disposed.
+          if (o instanceof THREE.Mesh && o.geometry !== this.geo.box && o.geometry !== this.geo.cyl) o.geometry.dispose();
           if (!Object.values(this.mats).includes(o.material as never)) (o.material as THREE.Material).dispose();
         }
       });
@@ -411,6 +503,8 @@ export class PlantScene {
     this.machines.clear();
     this.takenUnits.clear();
     this.hitMeshes = [];
+    const led = this.indicator === "led";
+    const k = this.markerScale;
 
     for (const m of list) {
       const px = m.x * DRAWING.width;
@@ -419,7 +513,7 @@ export class PlantScene {
       const unit = hit && !this.takenUnits.has(hit[0]) && hit[1].andon ? hit : null;
 
       let anchor: THREE.Vector3;
-      let andon: Andon;
+      let andon: Andon | undefined;
       let size: number;
       let center: THREE.Vector3;
       if (unit) {
@@ -429,28 +523,45 @@ export class PlantScene {
         const [x1, y1, x2, y2] = unit[1].rect;
         size = Math.max(this.m(x2 - x1), this.m(y2 - y1)) / 2 + 0.8;
         center = new THREE.Vector3(anchor.x, 0, anchor.z);
-      } else {
-        // Free-standing pole with its own stack light.
+      } else if (led) {
         center = new THREE.Vector3(this.wx(px), 0, this.wz(py));
+        anchor = new THREE.Vector3(center.x, LED_HEIGHT * k, center.z);
+        size = 1.2 * k;
+      } else {
+        // Free-standing pole with its own stack light, built at the origin and scaled as a whole.
+        center = new THREE.Vector3(this.wx(px), 0, this.wz(py));
+        const post = new THREE.Group();
         const pole = new THREE.Mesh(this.geo.cyl, this.mats.darkGrey);
         pole.scale.set(0.06, 3, 0.06);
-        pole.position.set(center.x, 1.5, center.z);
-        this.marks.add(pole);
+        pole.position.set(0, 1.5, 0);
+        post.add(pole);
         const before = this.model.children.length;
-        andon = this.andon(center.x, center.z, 3);
-        // Move the lamp meshes just created into the marks group so they are removed with it.
-        for (const o of this.model.children.slice(before)) this.marks.add(o);
-        anchor = new THREE.Vector3(center.x, 4.4, center.z);
-        size = 1.2;
+        andon = this.andon(0, 0, 3);
+        // Move the lamp meshes just created into the post so they are removed with it.
+        for (const o of this.model.children.slice(before)) post.add(o);
+        post.position.copy(center);
+        post.scale.setScalar(k);
+        this.marks.add(post);
+        anchor = new THREE.Vector3(center.x, 4.4 * k, center.z);
+        size = 1.2 * k;
       }
 
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(size, size + 0.35, 48),
-        new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: m.dim ? 0.25 : 0.85, side: THREE.DoubleSide })
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(center.x, 0.03, center.z);
-      this.marks.add(ring);
+      const mark: MachineMark = { anchor, andon, status: m.status, dim: m.dim };
+      if (led) {
+        // On a unit the LED floats above its stack light; free-standing it floats over the floor.
+        const at = unit ? anchor.clone().setY(anchor.y + 0.5 * k) : anchor.clone();
+        mark.led = this.ledDot(center, at, m.color, m.dim, k);
+        anchor = mark.anchor = at.clone().setY(at.y + 0.6 * k);
+      } else {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(size, size + 0.35 * k, 48),
+          new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: m.dim ? 0.25 : 0.85, side: THREE.DoubleSide })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(center.x, 0.03, center.z);
+        this.marks.add(ring);
+        mark.ring = ring;
+      }
 
       const hitMesh = new THREE.Mesh(this.geo.box, this.mats.hit);
       hitMesh.scale.set(size * 2, anchor.y, size * 2);
@@ -459,8 +570,59 @@ export class PlantScene {
       this.marks.add(hitMesh);
       this.hitMeshes.push(hitMesh);
 
-      this.machines.set(m.id, { anchor, andon, ring, status: m.status, dim: m.dim });
+      this.machines.set(m.id, mark);
     }
+  }
+
+  /** Soft round glow, white so materials can tint it. */
+  private glowTexture() {
+    if (!this.glow) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const ctx = c.getContext("2d")!;
+      const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, "rgba(255,255,255,1)");
+      g.addColorStop(0.25, "rgba(255,255,255,0.6)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 128, 128);
+      this.glow = new THREE.CanvasTexture(c);
+    }
+    return this.glow;
+  }
+
+  /** LED: a lit bead at `at`, a halo around it and a pool of light on the floor below. */
+  private ledDot(center: THREE.Vector3, at: THREE.Vector3, color: string, dim: boolean, scale: number): Led {
+    const glow = this.glowTexture();
+    const core = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2, roughness: 0.3, transparent: true });
+    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.42 * scale, 24, 16), core);
+    bead.position.copy(at);
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: glow, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    halo.position.copy(at);
+    halo.scale.setScalar(3.2 * scale);
+    const poolMat = new THREE.MeshBasicMaterial({ map: glow, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(5 * scale, 5 * scale), poolMat);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(center.x, 0.04, center.z);
+    this.marks.add(bead, halo, pool);
+    const led = { core, halo, pool: poolMat, size: 3.2 * scale };
+    this.lightLed(led, "NONE", dim, 0);
+    return led;
+  }
+
+  /** RUN breathes softly, STOP / BREAKDOWN blink, the rest stay steady; inactive machines are faint. */
+  private lightLed(led: Led, status: PlacedMachine["status"], dim: boolean, time: number) {
+    const blinking = !dim && (status === "STOP" || status === "BREAKDOWN");
+    const lit = !blinking || Math.sin(time * 6) > 0;
+    const breathe = !dim && status === "RUN" ? 0.85 + 0.15 * Math.sin(time * 2.5) : 1;
+    const level = dim ? 0.25 : lit ? breathe : 0.12;
+    led.core.emissiveIntensity = 2 * level;
+    led.core.opacity = dim ? 0.5 : 1;
+    led.halo.material.opacity = 0.9 * level;
+    led.halo.scale.setScalar(led.size * (0.9 + 0.1 * breathe));
+    led.pool.opacity = 0.55 * level;
   }
 
   private lightAndon(a: Andon, status: PlacedMachine["status"], dim: boolean, time: number) {
@@ -501,6 +663,20 @@ export class PlantScene {
     return p ? { x: p.x / this.floorW + 0.5, y: p.z / this.floorD + 0.5 } : null;
   }
 
+  /** True when the pointer travelled since it was pressed: the click ends a camera drag. */
+  isDrag(e: { clientX: number; clientY: number }) {
+    return !!this.downAt && Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) > CLICK_SLOP_PX;
+  }
+
+  private onPointerDown = (e: PointerEvent) => {
+    this.downAt = { x: e.clientX, y: e.clientY };
+    this.controls.enabled = !(this.machinesDraggable && e.button === 0 && this.pick(e));
+  };
+
+  private onPointerUp = () => {
+    this.controls.enabled = true;
+  };
+
   private onPointerMove = (e: PointerEvent) => {
     const id = this.pick(e);
     this.renderer.domElement.style.cursor = id ? "pointer" : "default";
@@ -517,13 +693,64 @@ export class PlantScene {
   };
 
   private onClick = (e: MouseEvent) => {
+    if (this.isDrag(e)) return;
     const id = this.pick(e);
     if (id) this.onSelect?.(id);
   };
 
   // ---------- camera & loop ----------
 
-  /** Fixed camera at ELEVATION / AZIMUTH, pulled back until the whole floor and equipment fit. */
+  /** Default view to use from now on, applied right away unless the user has moved the camera. */
+  setHomeView(view: LayoutView | null) {
+    this.homeView = view;
+    if (!this.userMoved) this.applyHome();
+  }
+
+  /** Back to the default view. */
+  resetView() {
+    this.userMoved = false;
+    this.applyHome();
+  }
+
+  /** Current camera, rounded to centimetres. */
+  getView(): LayoutView {
+    const r = (v: THREE.Vector3) => v.toArray().map((n) => Math.round(n * 100) / 100) as LayoutView["position"];
+    return { position: r(this.camera.position), target: r(this.controls.target) };
+  }
+
+  /** Drag mode chosen last in this tab; new scenes start with it. */
+  static dragMode: "rotate" | "pan" = "rotate";
+
+  /** What a left-drag (or one-finger drag) does; the right button does the other. */
+  setDragMode(mode: "rotate" | "pan") {
+    PlantScene.dragMode = mode;
+    const pan = mode === "pan";
+    this.controls.mouseButtons.LEFT = pan ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    this.controls.mouseButtons.RIGHT = pan ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+    this.controls.touches.ONE = pan ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+  }
+
+  /** Moves the camera towards (factor < 1) or away from (factor > 1) what it looks at. */
+  zoom(factor: number) {
+    const { minDistance, maxDistance, target } = this.controls;
+    const offset = this.camera.position.clone().sub(target);
+    offset.setLength(THREE.MathUtils.clamp(offset.length() * factor, minDistance, maxDistance));
+    this.camera.position.copy(target).add(offset);
+    this.controls.update();
+    this.userMoved = true;
+  }
+
+  private applyHome() {
+    if (this.homeView) {
+      this.camera.position.fromArray(this.homeView.position);
+      this.controls.target.fromArray(this.homeView.target);
+    } else {
+      this.fitCamera();
+    }
+    this.controls.update();
+  }
+
+  /** Camera at ELEVATION / AZIMUTH, pulled back until the whole floor and equipment fit. */
   private fitCamera() {
     const el = THREE.MathUtils.degToRad(ELEVATION);
     const az = THREE.MathUtils.degToRad(AZIMUTH);
@@ -550,6 +777,7 @@ export class PlantScene {
       else lo = mid;
     }
     fits(hi);
+    this.controls.target.copy(target);
   }
 
   private resize() {
@@ -558,16 +786,20 @@ export class PlantScene {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.fitCamera();
+    if (!this.userMoved) this.applyHome();
   }
 
   private loop = () => {
     this.frame = requestAnimationFrame(this.loop);
     const time = this.clock.getElapsedTime();
+    this.controls.update();
     for (const m of this.machines.values()) {
-      this.lightAndon(m.andon, m.status, m.dim, time);
-      const s = 1 + (time % 1.5) / 1.5 * 0.25;
-      m.ring.scale.set(s, s, 1);
+      if (m.andon) this.lightAndon(m.andon, m.status, m.dim, time);
+      if (m.led) this.lightLed(m.led, m.status, m.dim, time);
+      if (m.ring) {
+        const s = 1 + (time % 1.5) / 1.5 * 0.25;
+        m.ring.scale.set(s, s, 1);
+      }
     }
     this.renderer.render(this.scene, this.camera);
     this.placeLabels();
@@ -604,7 +836,11 @@ export class PlantScene {
   dispose() {
     cancelAnimationFrame(this.frame);
     this.resizeObserver.disconnect();
+    this.controls.dispose();
+    this.glow?.dispose();
     const canvas = this.renderer.domElement;
+    canvas.removeEventListener("pointerdown", this.onPointerDown, true);
+    window.removeEventListener("pointerup", this.onPointerUp);
     canvas.removeEventListener("pointermove", this.onPointerMove);
     canvas.removeEventListener("pointerleave", this.onPointerLeave);
     canvas.removeEventListener("click", this.onClick);
@@ -617,7 +853,10 @@ export class PlantScene {
       }
     });
     geometries.forEach((g) => g.dispose());
-    materials.forEach((m) => m.dispose());
+    materials.forEach((m) => {
+      if (m instanceof THREE.MeshBasicMaterial) m.map?.dispose();
+      m.dispose();
+    });
     this.renderer.dispose();
     canvas.remove();
   }

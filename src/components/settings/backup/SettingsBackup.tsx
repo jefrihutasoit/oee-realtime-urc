@@ -22,13 +22,14 @@ const INCLUDED = [
   "SKU master (without photos)",
   "Shifts",
   "Status definition",
-  "3D layout machine positions",
+  "3D layout: machine positions, default camera view, status indicator and marker size",
+  "Role permissions",
   "Reject types",
   "Gateway settings (HTTP / MQTT, incl. API key and MQTT password: keep the file safe)",
   "Theme",
 ];
 const EXCLUDED =
-  "Production history, tag values, reject data, uploaded photos, the layout image, and the database connection (it belongs to the server)";
+  "Production history, tag values, reject and downtime data, user accounts, uploaded photos, the layout image, and the database connection (it belongs to the server). To back up everything, use the full system backup in Settings → Database";
 
 export default function SettingsBackup() {
   const fileInput = useRef<HTMLInputElement>(null);

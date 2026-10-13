@@ -4,6 +4,7 @@ import { MANAGED_ROLES, type ManagedRole, type RolePermissions } from "@/types/a
 import { BACKUP_VERSION, type BackupMachine, type SettingsBackup } from "@/types/backup";
 import type { GatewaySettings } from "@/types/gateway";
 import type { AppearanceSettings } from "@/types/system";
+import { LAYOUT_INDICATORS, type LayoutDisplay, type LayoutIndicator } from "@/types/layout";
 import type { MachineStatus } from "@/types/oee";
 
 /**
@@ -27,6 +28,7 @@ const SHEETS = {
   rejectTypes: "Reject Types",
   gateway: "Gateway",
   theme: "Theme",
+  layoutDisplay: "Layout Display",
 } as const;
 
 const MACHINE_COLUMNS = [
@@ -69,7 +71,7 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
       ["OEE Realtime URC - Settings Backup"],
       ["Version", backup.version],
       ["Exported At", backup.exportedAt],
-      ["Note", "Settings only: no production history, reject data or uploaded photos. Edit with care."],
+      ["Note", "Settings only: no production history, reject data, uploaded photos or layout image. Edit with care."],
     ],
     [14, 60]
   );
@@ -172,6 +174,21 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
         ["Accent", backup.appearance.accent],
       ],
       [14, 14]
+    );
+  }
+  const ld = backup.layoutDisplay;
+  if (ld) {
+    add(
+      SHEETS.layoutDisplay,
+      [
+        ["Setting", "Value"],
+        ["Status Indicator", ld.indicator],
+        ["Marker Size", ld.markerSize],
+        // Empty camera cells: the automatic view.
+        ["Camera Position", ld.view ? ld.view.position.join(", ") : ""],
+        ["Camera Target", ld.view ? ld.view.target.join(", ") : ""],
+      ],
+      [18, 24]
     );
   }
   return wb;
@@ -514,6 +531,29 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
     };
   }
 
+  let layoutDisplay: LayoutDisplay | undefined;
+  const ldRows = settingRows(SHEETS.layoutDisplay);
+  if (ldRows) {
+    const cell = (label: string) => ldRows.get(headerKey(label));
+    const indicator = (text(cell("Status Indicator")?.value ?? null).toLowerCase() || "ring") as LayoutIndicator;
+    if (!LAYOUT_INDICATORS.includes(indicator)) {
+      errors.push(`${cell("Status Indicator")!.where}: Value must be ${LAYOUT_INDICATORS.join(" or ")}`);
+    }
+    const size = cell("Marker Size");
+    const markerSize = !size || text(size.value) === "" ? 1 : num(size.value, `${size.where}: Value`, errors);
+    const vector = (label: string) => {
+      const c = cell(label);
+      if (!c || text(c.value) === "") return null;
+      const v = numberList(c.value, `${c.where}: Value`, errors);
+      if (v.length !== 3) errors.push(`${c.where}: Value must be three numbers (x, y, z)`);
+      return v as [number, number, number];
+    };
+    const position = vector("Camera Position");
+    const target = vector("Camera Target");
+    if (!position !== !target) errors.push(`${SHEETS.layoutDisplay}: fill both Camera Position and Camera Target, or neither`);
+    layoutDisplay = { indicator, markerSize, view: position && target ? { position, target } : null };
+  }
+
   const version = Number(info.get("version"));
   if (infoSheet && version !== BACKUP_VERSION) {
     errors.push(`Backup version ${text(info.get("version")) || "(empty)"} is not supported (expected ${BACKUP_VERSION})`);
@@ -533,6 +573,7 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
       rejectTypes,
       gatewaySettings,
       appearance,
+      layoutDisplay,
     },
     errors,
   };

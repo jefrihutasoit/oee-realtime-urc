@@ -28,12 +28,14 @@ const BRAND = "#1E6FD9";
 const oeeColor = (v: number | null) => ((v ?? 0) >= OEE_TARGET ? "#22A447" : (v ?? 0) >= 60 ? "#F5A524" : "#E5484D");
 
 type Metric = "oee" | "availability" | "performance" | "quality";
-const METRICS: { value: Metric; label: string }[] = [
-  { value: "oee", label: "OEE" },
-  { value: "availability", label: "Availability" },
-  { value: "performance", label: "Performance" },
-  { value: "quality", label: "Quality" },
+const METRICS: { value: Metric; label: string; color: string }[] = [
+  { value: "oee", label: "OEE", color: SERIES_COLORS[0] },
+  { value: "availability", label: "Availability", color: SERIES_COLORS[2] },
+  { value: "performance", label: "Performance", color: SERIES_COLORS[3] },
+  { value: "quality", label: "Quality", color: SERIES_COLORS[6] },
 ];
+/** Trend view: OEE with A / P / Q of the combined machines, or one metric per machine. */
+type TrendView = "all" | Metric;
 type Period = "daily" | "weekly" | "monthly";
 
 interface Filters {
@@ -125,7 +127,7 @@ export default function Historical() {
   const [data, setData] = useState<HistoricalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [metric, setMetric] = useState<Metric>("oee");
+  const [view, setView] = useState<TrendView>("all");
   const [period, setPeriod] = useState<Period>("daily");
   const [pickedDetail, setPickedDetail] = useState<{ machineId: string; date: string } | null>(null);
   const [detail, setDetail] = useState<(HourlyDetail & { key: string }) | null>(null);
@@ -206,9 +208,25 @@ export default function Historical() {
     [skus]
   );
 
-  /** One line per machine (up to the 8 categorical slots), else the total of all machines. */
+  /**
+   * "all": OEE, A, P and Q of the combined machines. One metric: a line per machine (up to the 8
+   * categorical slots), else the total of all machines.
+   */
   const trend = useMemo((): { series: TrendSeries[]; folded: boolean } => {
     if (!data) return { series: [], folded: false };
+    if (view === "all") {
+      return {
+        folded: true,
+        series: METRICS.map((m) => ({
+          key: m.value,
+          label: m.label,
+          color: m.color,
+          width: m.value === "oee" ? 3 : 2,
+          values: data.days.map((d) => d.total[m.value]),
+        })),
+      };
+    }
+    const metric = view;
     if (data.machines.length > 0 && data.machines.length <= SERIES_COLORS.length) {
       return {
         folded: false,
@@ -231,7 +249,7 @@ export default function Historical() {
         },
       ],
     };
-  }, [data, metric, name.many]);
+  }, [data, view, name.many]);
 
   /** Output and reject per period and machine, newest period first; periods without data are left out. */
   const breakdown = useMemo(() => {
@@ -395,21 +413,27 @@ export default function Historical() {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
             {/* Trend */}
-            <Card className="xl:col-span-7">
+            <Card className="flex flex-col xl:col-span-7">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold text-slate-900">{METRICS.find((m) => m.value === metric)!.label} Trend</h3>
+                  <h3 className="font-semibold text-slate-900">
+                    {view === "all" ? "OEE Trend" : `${METRICS.find((m) => m.value === view)!.label} Trend`}
+                  </h3>
                   <p className="text-xs text-slate-500">
                     Per production day
-                    {trend.folded && ` · all ${data.machines.length} ${name.many.toLowerCase()} combined; filter up to ${SERIES_COLORS.length} to compare`}
+                    {view === "all"
+                      ? ` · all ${data.machines.length} ${name.many.toLowerCase()} combined`
+                      : trend.folded &&
+                        ` · all ${data.machines.length} ${name.many.toLowerCase()} combined; filter up to ${SERIES_COLORS.length} to compare`}
                   </p>
                 </div>
                 <select
-                  value={metric}
-                  onChange={(e) => setMetric(e.target.value as Metric)}
+                  value={view}
+                  onChange={(e) => setView(e.target.value as TrendView)}
                   aria-label="Trend metric"
                   className="h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none"
                 >
+                  <option value="all">OEE + A / P / Q</option>
                   {METRICS.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
@@ -418,7 +442,14 @@ export default function Historical() {
                 </select>
               </div>
               {data.machines.length ? (
-                <TrendChart dates={data.days.map((d) => d.date)} series={trend.series} metric={metric} />
+                <div className="min-h-0 flex-1">
+                  <TrendChart
+                    dates={data.days.map((d) => d.date)}
+                    series={trend.series}
+                    metric={view === "all" ? "OEE, availability, performance and quality" : view}
+                    target={view === "all" || view === "oee" ? OEE_TARGET : undefined}
+                  />
+                </div>
               ) : (
                 <p className="py-16 text-center text-sm text-slate-400">No production data for these filters.</p>
               )}
@@ -427,9 +458,9 @@ export default function Historical() {
             {/* By machine */}
             <Card className="xl:col-span-5">
               <h3 className="mb-3 font-semibold text-slate-900">OEE by {name.one}</h3>
-              <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <div className="max-h-[480px] overflow-auto rounded-lg border border-slate-200">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-[1]">
                     <tr>
                       <th className={`${th} text-left`}>{name.one}</th>
                       {[

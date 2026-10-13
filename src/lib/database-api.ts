@@ -18,8 +18,11 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 export const databaseApi = {
   stats: () => apiRequest<DatabaseStats>("/database/stats"),
   backup: () => apiDownload("/database/backup", "oee-db-backup.jsonl.gz"),
+  /** Database plus every uploaded file (photos, layout image). */
+  fullBackup: () => apiDownload("/database/backup?full=1", "oee-full-backup.jsonl.gz"),
+  /** Takes a database or a full system backup; `full` says which one it was. */
   restore: (file: File) =>
-    apiRequest<{ exportedAt: string | null; tables: Record<string, number> }>("/database/restore", {
+    apiRequest<{ exportedAt: string | null; tables: Record<string, number>; full: boolean; files: number }>("/database/restore", {
       method: "POST",
       body: file,
       headers: { "Content-Type": "application/gzip" },

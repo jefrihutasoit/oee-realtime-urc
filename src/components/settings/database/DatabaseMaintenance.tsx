@@ -93,7 +93,7 @@ function ConfirmModal({
 export default function DatabaseMaintenance() {
   const [stats, setStats] = useState<DatabaseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"backup" | "restore" | "clear" | "preview" | "init" | null>(null);
+  const [busy, setBusy] = useState<"backup" | "full" | "restore" | "clear" | "preview" | "init" | null>(null);
   const [backupNotice, setBackupNotice] = useState<Notice>(null);
   const [restoreNotice, setRestoreNotice] = useState<Notice>(null);
   const [clearNotice, setClearNotice] = useState<Notice>(null);
@@ -120,11 +120,11 @@ export default function DatabaseMaintenance() {
 
   const message = (err: unknown) => (err instanceof Error ? err.message : "Failed");
 
-  async function backup() {
-    setBusy("backup");
+  async function backup(full: boolean) {
+    setBusy(full ? "full" : "backup");
     setBackupNotice(null);
     try {
-      const name = await databaseApi.backup();
+      const name = await (full ? databaseApi.fullBackup() : databaseApi.backup());
       setBackupNotice({ text: `Saved ${name}`, ok: true });
     } catch (err) {
       setBackupNotice({ text: message(err), ok: false });
@@ -141,7 +141,9 @@ export default function DatabaseMaintenance() {
       const result = await databaseApi.restore(restoreFile);
       const rows = Object.values(result.tables).reduce((s, n) => s + n, 0);
       setRestoreNotice({
-        text: `Database restored: ${fmt.format(rows)} rows${result.exportedAt ? ` from the backup of ${dateTimeFmt.format(new Date(result.exportedAt))}` : ""}.`,
+        text: `${result.full ? "Full system" : "Database"} restored: ${fmt.format(rows)} rows${
+          result.full ? ` and ${fmt.format(result.files)} files` : ""
+        }${result.exportedAt ? ` from the backup of ${dateTimeFmt.format(new Date(result.exportedAt))}` : ""}.`,
         ok: true,
       });
       setRestoreFile(null);
@@ -214,24 +216,41 @@ export default function DatabaseMaintenance() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="space-y-4">
-          <Card icon={<Download size={18} />} title="Backup Database" sub="Every table: settings, users, history, reject and downtime data.">
+          <Card icon={<Download size={18} />} title="Backup" sub="Every table: settings, users, history, reject and downtime data.">
+            <ul className="space-y-1 text-xs text-slate-500">
+              <li>
+                <strong className="text-slate-700">Full system backup</strong>: the database plus every uploaded file (SKU
+                photos, layout image). Use it to move or rebuild the whole system.
+              </li>
+              <li>
+                <strong className="text-slate-700">Database backup</strong>: the database only, smaller. Uploaded files are
+                not in it.
+              </li>
+            </ul>
             <p className="text-xs text-slate-500">
-              Saved as a compressed <code>.jsonl.gz</code> file. Uploaded photos and the layout image are not in it.
+              Both are compressed <code>.jsonl.gz</code> files and are restored below. They contain user accounts (password
+              hashes) and gateway keys: keep them safe.
             </p>
             <NoticeBox notice={backupNotice} />
-            <button type="button" onClick={backup} disabled={busy !== null} className={buttonStyles.primary}>
-              {busy === "backup" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-              Download Backup
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => backup(true)} disabled={busy !== null} className={buttonStyles.primary}>
+                {busy === "full" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                Download Full Backup
+              </button>
+              <button type="button" onClick={() => backup(false)} disabled={busy !== null} className={buttonStyles.secondary}>
+                {busy === "backup" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                Database Only
+              </button>
+            </div>
           </Card>
 
-          <Card icon={<Upload size={18} />} title="Restore Database" sub="Replaces everything in the database with a backup file.">
+          <Card icon={<Upload size={18} />} title="Restore" sub="Replaces everything with a full system or database backup file.">
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <p>
                 All current data is replaced, in one step: if the file is damaged nothing changes. The backup must come from
                 the same backend version{stats?.schemaVersion ? ` (${stats.schemaVersion})` : ""}. Users not in the backup are
-                signed out.
+                signed out. A full system backup also replaces the uploaded photos and the layout image.
               </p>
             </div>
             <input
@@ -383,7 +402,7 @@ export default function DatabaseMaintenance() {
         <ConfirmModal title="Restore" word="RESTORE" busy={busy === "restore"} onConfirm={restore} onClose={() => setConfirm(null)}>
           <p>
             Replace the whole database with <strong className="text-slate-900">{restoreFile?.name}</strong>? Current data that
-            is not in the backup is lost.
+            is not in the backup is lost; with a full system backup the uploaded files are replaced too.
           </p>
         </ConfirmModal>
       )}

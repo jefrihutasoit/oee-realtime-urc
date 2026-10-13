@@ -1,4 +1,5 @@
 // Keep in sync with be-realtime-urc/src/types/backup.ts
+import type { LayoutDisplay } from "./layout";
 import type { GatewaySettings } from "./gateway";
 import type { AppearanceSettings } from "./system";
 import type { RolePermissions } from "./auth";
@@ -7,7 +8,8 @@ import type { OeeSettings, StatusDefinition } from "./settings";
 export const BACKUP_VERSION = 1;
 
 /**
- * All system settings, without history (tag values, reject data) and without uploaded images.
+ * All system settings, without history (tag values, reject data) and without uploaded images
+ * (machine and SKU photos, the layout image).
  * Records refer to each other by their user-facing keys (machine No, SKU ID, shift name), not by
  * database ids, so a backup can be restored on another installation.
  */
@@ -32,6 +34,8 @@ export interface SettingsBackup {
   gatewaySettings?: GatewaySettings;
   /** Theme; a backup without it keeps the current one. */
   appearance?: AppearanceSettings;
+  /** 3D layout look: default camera, status indicator and marker size; a backup without it keeps the current one. */
+  layoutDisplay?: LayoutDisplay;
 }
 
 export interface BackupMachine {

@@ -5,10 +5,12 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import MachineInfoCard, { PIN_STYLES, pinStateOf } from "@/components/dashboard/MachineInfoCard";
 import { useLiveMachines } from "@/hooks/useLiveMachines";
+import { assetUrl } from "@/lib/api";
 import { layoutApi } from "@/lib/layout-api";
 import type { PlantLayout } from "@/types/layout";
-import { PlantScene } from "./plant-scene";
+import { loadLayoutImage, PlantScene } from "./plant-scene";
 import PlantSidePanel from "./PlantSidePanel";
+import ViewControls from "./ViewControls";
 
 const HIDE_DELAY_MS = 180;
 /** The machine clicked last, kept across visits in this browser. */
@@ -32,6 +34,8 @@ export default function PlantLayout3D() {
     }
   }, []);
   const [layout, setLayout] = useState<PlantLayout | null>(null);
+  /** Uploaded layout image; null shows the built-in model, undefined while it loads. */
+  const [image, setImage] = useState<HTMLImageElement | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [cardBelow, setCardBelow] = useState(false);
@@ -44,7 +48,10 @@ export default function PlantLayout3D() {
   useEffect(() => {
     layoutApi
       .get()
-      .then(setLayout)
+      .then(async (l) => {
+        setImage(await loadLayoutImage(assetUrl(l.image)));
+        setLayout(l);
+      })
       .catch((err: Error) => setError(err.message));
   }, []);
 
@@ -62,12 +69,12 @@ export default function PlantLayout3D() {
     hideTimer.current = setTimeout(() => setHovered(null), HIDE_DELAY_MS);
   }, []);
 
-  const ready = !!layout;
+  const ready = !!layout && image !== undefined;
 
   useEffect(() => {
     const el = canvasRef.current;
     if (!el || !ready) return;
-    const scene = new PlantScene(el);
+    const scene = new PlantScene(el, image);
     machineEls.current.forEach((label, id) => scene.machineLabels.set(id, label));
     scene.onHover = (id) => (id ? show(id) : scheduleHide());
     // A click shows the machine in the side panel; its card links to the detail page.
@@ -78,7 +85,7 @@ export default function PlantLayout3D() {
       scene.dispose();
       sceneRef.current = null;
     };
-  }, [ready, show, scheduleHide, select]);
+  }, [ready, image, show, scheduleHide, select]);
 
   const byId = useMemo(() => new Map((machines ?? []).map((m) => [m.id, m])), [machines]);
   const placed = useMemo(
@@ -104,9 +111,12 @@ export default function PlantLayout3D() {
         };
       }),
     );
-  }, [placed, ready]);
+  }, [placed, ready, image]);
 
   useEffect(() => sceneRef.current?.setHovered(hovered), [hovered]);
+  useEffect(() => sceneRef.current?.setHomeView(layout?.view ?? null), [layout, ready, image]);
+  useEffect(() => sceneRef.current?.setIndicator(layout?.indicator ?? "ring"), [layout, ready, image]);
+  useEffect(() => sceneRef.current?.setMarkerScale(layout?.markerSize ?? 1), [layout, ready, image]);
 
   const registerMachine = (id: string) => (el: HTMLElement | null) => {
     if (el) {
@@ -144,7 +154,7 @@ export default function PlantLayout3D() {
           href="/settings/layout"
           className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-surface px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          Edit machine positions
+          Edit layout
         </Link>
       </div>
 
@@ -157,7 +167,7 @@ export default function PlantLayout3D() {
             <p className="rounded-xl border border-slate-200 bg-surface p-8 text-center text-sm text-red-600">
               {error}
             </p>
-          ) : !layout ? (
+          ) : !ready ? (
             <div className="flex justify-center rounded-xl border border-slate-200 bg-surface py-24 text-slate-500">
               <Loader2 className="animate-spin" />
             </div>
@@ -167,6 +177,7 @@ export default function PlantLayout3D() {
               className="relative h-[calc(100vh-220px)] min-h-[460px] overflow-hidden rounded-xl border border-slate-200 bg-[#dde4ec]"
             >
               <div ref={canvasRef} className="absolute inset-0" />
+              <ViewControls scene={() => sceneRef.current} />
 
               {/* Labels are positioned every frame by the scene. */}
               <div className="pointer-events-none absolute inset-0">
@@ -193,7 +204,7 @@ export default function PlantLayout3D() {
                         className={`flex items-center gap-1.5 rounded-full border-2 bg-surface px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-slate-900 shadow-md ${
                           state === "INACTIVE" ? "opacity-60" : ""
                         } ${isSelected ? "scale-110 ring-2 ring-(--brand) ring-offset-1" : ""}`}
-                        style={{ borderColor: color, boxShadow: `0 0 10px ${color}88` }}
+                        style={{ borderColor: color, boxShadow: `0 0 10px ${color}88`, zoom: layout.markerSize }}
                       >
                         <span
                           className={`size-2 rounded-full ${state === "STOP" ? "animate-pulse" : ""}`}
