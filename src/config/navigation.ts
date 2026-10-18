@@ -48,7 +48,14 @@ export const navigation: NavItem[] = [
     children: [{ label: "Upload", href: "/downtime/upload" }],
   },
   { label: "Reports", icon: FileText, href: "/reports" },
-  { label: "Historical", icon: ChartLine, href: "/historical" },
+  {
+    label: "Historical",
+    icon: ChartLine,
+    children: [
+      { label: "OEE", href: "/historical" },
+      { label: "Trend", href: "/historical/trend" },
+    ],
+  },
   { label: "SKU Management", icon: Boxes, href: "/sku" },
   { label: "User Management", icon: Users, href: "/users" },
   { label: "Simulator", icon: FlaskConical, href: "/simulator" },

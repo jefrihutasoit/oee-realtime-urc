@@ -5,6 +5,7 @@ import type { LiveMachine } from "@/hooks/useLiveMachines";
 import { useMachineLabel } from "@/lib/machine-label";
 import type { LiveStatus } from "@/types/oee";
 import SkuImage from "./SkuImage";
+import { SpeedMeter } from "./SpeedIndicator";
 
 export type PinState = LiveStatus | "NO_DATA" | "INACTIVE";
 
@@ -114,6 +115,10 @@ export default function MachineInfoCard({ machine, className = "w-64 shadow-xl" 
             </dd>
           </dl>
         </div>
+      )}
+
+      {machine.isActive && machine.speed && (
+        <SpeedMeter speed={machine.speed} outputUnit={machine.outputUnit} className="border-t border-slate-100 px-3 py-2" />
       )}
 
       {machine.isActive && (

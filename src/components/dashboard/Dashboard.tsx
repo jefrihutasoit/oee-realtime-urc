@@ -10,6 +10,7 @@ import type { MachineStatus } from "@/types/oee";
 import SummaryCards from "./SummaryCards";
 import MachineCard, { OeeBar, oeeLabel, StatusPill } from "./MachineCard";
 import SkuImage from "./SkuImage";
+import { SpeedBadge } from "./SpeedIndicator";
 
 const fmt = new Intl.NumberFormat("en-US");
 
@@ -212,12 +213,13 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 <th className="px-4 py-2.5 font-medium">{name.one}</th>
                 <th className="px-4 py-2.5 font-medium">Line</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium" title="Speed / SKU spec per minute">Speed</th>
                 <th className="px-4 py-2.5 font-medium">SKU</th>
                 <th className="w-40 px-4 py-2.5 font-medium">OEE</th>
                 <th className="px-4 py-2.5 text-right font-medium">A / P / Q</th>
@@ -248,6 +250,13 @@ export default function Dashboard() {
                   <td className="px-4 py-2.5 text-slate-600">{m.line}</td>
                   <td className="px-4 py-2.5">
                     <StatusPill status={dashboardStatus(m.status)} inactive={!m.isActive} />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {m.isActive && m.speed ? (
+                      <SpeedBadge speed={m.speed} outputUnit={m.outputUnit} />
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     {m.live ? (

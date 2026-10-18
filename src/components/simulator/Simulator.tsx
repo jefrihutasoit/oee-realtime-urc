@@ -39,6 +39,7 @@ function rowsOf(m: MachineRegistration): TagRow[] {
     { key: `${m.id}:output`, role: "OUTPUT", label: "Output", tagName: m.tagOutput },
     { key: `${m.id}:reject`, role: "REJECT", label: "Reject", tagName: m.tagReject },
     { key: `${m.id}:product`, role: "PRODUCT", label: "Product", tagName: m.tagProduct },
+    ...(m.tagSpeed ? [{ key: `${m.id}:speed`, role: "MONITOR" as const, label: "Speed", tagName: m.tagSpeed }] : []),
     ...m.monitoringTags.map((t) => ({ key: `${m.id}:${t.id}`, role: "MONITOR" as const, label: t.name, tagName: t.tagName })),
   ];
 }

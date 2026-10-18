@@ -13,12 +13,17 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
+/** The child the page belongs to: the longest matching href, so "/historical" is not also lit on "/historical/trend". */
+const activeChild = (pathname: string, children: { href: string }[]) =>
+  children.filter((c) => isActive(pathname, c.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
 const base =
   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-blue-400";
 
 function NavGroup({ item, pathname, collapsed }: { item: NavItem; pathname: string; collapsed: boolean }) {
   const Icon = item.icon;
-  const childActive = item.children?.some((c) => isActive(pathname, c.href)) ?? false;
+  const current = item.children ? activeChild(pathname, item.children) : undefined;
+  const childActive = current !== undefined;
   const [open, setOpen] = useState(childActive);
 
   // Collapsed sidebar has no room for a submenu, so a group links straight to its first child.
@@ -58,7 +63,7 @@ function NavGroup({ item, pathname, collapsed }: { item: NavItem; pathname: stri
       {open && (
         <ul className="mt-1 ml-[1.35rem] border-l border-white/10 pl-3">
           {item.children.map((child) => {
-            const active = isActive(pathname, child.href);
+            const active = child.href === current;
             return (
               <li key={child.href}>
                 <Link
