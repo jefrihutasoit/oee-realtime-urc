@@ -321,7 +321,12 @@ export default function MachineDetail({ id }: { id: string }) {
       aside={timeline ? `${timeline.shift.name} · ${timeline.shift.startLabel}–${timeline.shift.endLabel}` : undefined}
     >
       <div className="px-4 py-3">
-        <OperationTimeline data={timeline} />
+        <OperationTimeline
+          data={timeline}
+          machineId={machine.id}
+          outputUnit={machine.outputUnit}
+          speed={isActive ? (live?.speed ?? null) : null}
+        />
       </div>
     </Card>
   );
