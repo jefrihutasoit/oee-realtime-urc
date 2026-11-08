@@ -23,6 +23,7 @@ const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4000").replace
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   allowedDevOrigins: DEV_ORIGINS,
