@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowUp, Box, Factory, FileSpreadsheet, Loader2, RefreshCw, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Box, Factory, FileSpreadsheet, Gauge, Loader2, RefreshCw, X } from "lucide-react";
+import { SPEED_STYLES } from "@/components/dashboard/SpeedIndicator";
+import DateRangeInput from "@/components/ui/DateRangeInput";
 import { buttonStyles } from "@/components/ui/Modal";
 import { downtimeTypeColors, downtimeTypeLabel, minutesLabel } from "@/config/downtime";
 import { OEE_TARGET, statusStyles } from "@/config/oee";
@@ -18,7 +20,7 @@ const fmt = new Intl.NumberFormat("en-US");
 const dateFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
 const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-/** Today's summary is fetched again this often; other dates once. */
+/** A range that includes today is fetched again this often; past ranges once. */
 const LIVE_REFRESH_MS = 30_000;
 const STATUS_COLORS = { RUN: "#22c55e", STOP: "#f59e0b", OFF: "#64748b" } as const;
 const RANK_COLORS = ["#E5484D", "#F59E0B", "#EAB308"];
@@ -92,8 +94,12 @@ export default function Summary() {
   const pathname = usePathname();
   const params = useSearchParams();
   const today = todayYmd();
-  const date = params.get("date") || today;
-  const isToday = date === today;
+  // ?from=&to= for a range; ?date= (one day) still works for older links.
+  const from = params.get("from") || params.get("date") || today;
+  const to = params.get("to") || params.get("date") || from;
+  const single = from === to;
+  const isToday = single && from === today;
+  const includesToday = from <= today && to >= today;
 
   const [data, setData] = useState<DailySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,27 +108,31 @@ export default function Summary() {
   const name = useMachineLabel();
   const unitsOf = useProductionUnits();
 
-  // One request per date; today's is repeated every LIVE_REFRESH_MS.
+  // One request per range; one that includes today is repeated every LIVE_REFRESH_MS.
   const load = useCallback(() => {
     summaryApi
-      .daily(date)
+      .range(from, to)
       .then((s) => {
         setData(s);
         setError(null);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [date]);
+  }, [from, to]);
 
   useEffect(() => {
     load();
-    if (!isToday) return;
+    if (!includesToday) return;
     const timer = setInterval(load, LIVE_REFRESH_MS);
     return () => clearInterval(timer);
-  }, [load, isToday]);
+  }, [load, includesToday]);
 
-  const setDate = (d: string) => router.replace(d && d !== today ? `${pathname}?date=${d}` : pathname);
-
+  const setRange = (r: { from: string; to: string }) => {
+    // A cleared input keeps the current range.
+    if (!r.from || !r.to) return;
+    const [a, b] = [r.from, r.to].sort();
+    router.replace(a === today && b === today ? pathname : `${pathname}?from=${a}&to=${b}`);
+  };
 
   // Live machine status (today only). Breakdown is the Off of the status tag here.
   const live = useMemo(() => {
@@ -132,6 +142,13 @@ export default function Summary() {
     return { RUN: count("RUN"), STOP: count("STOP"), OFF: count("OFF"), total: active.length };
   }, [machines]);
 
+  // Live speed against the SKU spec, of the machines with a speed tag.
+  const speed = useMemo(() => {
+    const withSpeed = (machines ?? []).filter((m) => m.isActive && m.speed);
+    const of = (st: "ok" | "low" | "idle" | "unknown") => withSpeed.filter((m) => m.speed!.state === st);
+    return { ok: of("ok"), low: of("low"), idle: of("idle"), unknown: of("unknown"), total: withSpeed.length };
+  }, [machines]);
+
   const colorOf = useMemo(() => downtimeTypeColors(data?.downtime.byType.map((t) => t.type) ?? []), [data]);
 
   const header = (
@@ -139,9 +156,10 @@ export default function Summary() {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Summary</h2>
         <p className="text-sm text-slate-500">
-          {dateFmt.format(new Date(`${date}T00:00:00`))}
+          {dateFmt.format(new Date(`${from}T00:00:00`))}
+          {!single && ` – ${dateFmt.format(new Date(`${to}T00:00:00`))} · ${data?.days ?? ""} days`}
           {data && ` · production day ${timeFmt.format(new Date(data.dayStart)).slice(0, 5)} – ${timeFmt.format(new Date(data.dayEnd)).slice(0, 5)}`}
-          {isToday && (
+          {includesToday && (
             <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
               <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" /> Realtime
             </span>
@@ -150,18 +168,11 @@ export default function Summary() {
       </div>
       <div className="flex items-center gap-2">
         {!isToday && (
-          <button type="button" onClick={() => setDate(today)} className={buttonStyles.secondary}>
+          <button type="button" onClick={() => setRange({ from: today, to: today })} className={buttonStyles.secondary}>
             Today
           </button>
         )}
-        <input
-          type="date"
-          value={date}
-          max={today}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label="Production date"
-          className="h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm focus:border-blue-400 focus:outline-none"
-        />
+        <DateRangeInput from={from} to={to} max={today} compact onChange={setRange} />
         <button
           type="button"
           onClick={() => {
@@ -179,7 +190,7 @@ export default function Summary() {
     </div>
   );
 
-  if (!data || data.date !== date) {
+  if (!data || data.from !== from || data.to !== to) {
     return (
       <div className="space-y-4">
         {header}
@@ -312,12 +323,12 @@ export default function Summary() {
       {/* Trends */}
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <Card>
-          <Title sub={`Per hour, all ${name.many.toLowerCase()}`}>OEE Trend</Title>
-          <OeeTrendChart data={data.hourly} />
+          <Title sub={`Per ${data.bucket}, all ${name.many.toLowerCase()}`}>OEE Trend</Title>
+          <OeeTrendChart data={data.trend} bucket={data.bucket} />
         </Card>
         <Card>
-          <Title sub="Per hour; reject input is spread over its shift by output">Output vs Reject</Title>
-          <OutputRejectChart data={data.hourly} units={units} />
+          <Title sub={`Per ${data.bucket}; reject input is spread over its shift by output`}>Output vs Reject</Title>
+          <OutputRejectChart data={data.trend} bucket={data.bucket} units={units} />
         </Card>
       </div>
 
@@ -326,7 +337,7 @@ export default function Summary() {
         <Card>
           <Title sub="Top 3 reject types (Reject Input)">Top Reject</Title>
           <Ranking
-            empty="No reject input for this date"
+            empty={`No reject input for this ${single ? "date" : "period"}`}
             items={data.rejectByType.slice(0, 3).map((r) => ({
               label: r.name,
               value: withUnit(fmt.format(r.quantity), units.reject),
@@ -403,7 +414,7 @@ export default function Summary() {
                 <FromUpload />
               </div>
               <Ranking
-                empty="No downtime uploaded for this date"
+                empty={`No downtime uploaded for this ${single ? "date" : "period"}`}
                 items={data.downtime.byType.slice(0, 3).map((t) => ({
                   label: downtimeTypeLabel(t.type),
                   value: minutesLabel(t.seconds),
@@ -449,6 +460,37 @@ export default function Summary() {
               })}
             </ul>
           </div>
+          {includesToday && speed.total > 0 && (
+            <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+              <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Gauge size={13} /> Speed vs SKU spec · now
+              </p>
+              <div className="flex flex-wrap gap-2 text-sm">
+                {(
+                  [
+                    ["ok", speed.ok],
+                    ["low", speed.low],
+                    ["idle", speed.idle],
+                    ["unknown", speed.unknown],
+                  ] as const
+                ).filter(([st, list]) => list.length > 0 || st === "ok" || st === "low")
+                .map(([st, list]) => (
+                  <span
+                    key={st}
+                    title={list.map((m) => m.machineNo).join(", ") || undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-medium ${SPEED_STYLES[st].pill}`}
+                  >
+                    <span className="text-base font-bold tabular-nums">{list.length}</span> {SPEED_STYLES[st].label}
+                  </span>
+                ))}
+              </div>
+              {speed.low.length > 0 && (
+                <p className="text-xs text-amber-700">
+                  Below spec: {speed.low.map((m) => m.machineNo).join(", ")}
+                </p>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 

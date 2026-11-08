@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Package } from "lucide-react";
+import { ArrowLeft, ChartLine, Loader2, Package } from "lucide-react";
 import { OEE_TARGET, oeeWaitLabel, statusStyles } from "@/config/oee";
+import { scaleTags } from "@/config/yamato";
 import { StatusPill } from "@/components/dashboard/MachineCard";
 import SkuImage from "@/components/dashboard/SkuImage";
+import { SpeedBadge } from "@/components/dashboard/SpeedIndicator";
 import { useMachineDetail } from "@/hooks/useMachineDetail";
 import { useMachineLabel } from "@/lib/machine-label";
 import { withUnit, type ProductionUnits } from "@/lib/production-units";
@@ -244,6 +246,8 @@ export default function MachineDetail({ id }: { id: string }) {
   const unitText = (unit: string) =>
     unit && <span className="ml-1 font-sans text-xs font-normal text-slate-500">{unit}</span>;
   const adaptiveValues = isActive && monitoring?.mode === "adaptive" ? monitoring.values : [];
+  /** Registered mode: the monitoring tags plus the Yamato scale's fields. */
+  const registeredTags = [...machine.monitoringTags, ...scaleTags(machine)];
 
   const realtimeTags = (
     <Card
@@ -283,7 +287,7 @@ export default function MachineDetail({ id }: { id: string }) {
             </tbody>
           </table>
         )
-      ) : machine.monitoringTags.length === 0 ? (
+      ) : registeredTags.length === 0 ? (
         <p className="px-4 py-4 text-sm text-slate-500">
           No realtime tags registered.{" "}
           <Link href="/settings/machines" className="text-(--brand) hover:underline">
@@ -293,7 +297,7 @@ export default function MachineDetail({ id }: { id: string }) {
       ) : (
         <table className="w-full text-sm">
           <tbody className="divide-y divide-slate-100">
-            {machine.monitoringTags.map((t) => {
+            {registeredTags.map((t) => {
               const v = isActive ? monitoring?.values.find((x) => x.id === t.id)?.value : undefined;
               return (
                 <tr key={t.id} title={t.tagName} className="hover:bg-slate-50">
@@ -317,7 +321,12 @@ export default function MachineDetail({ id }: { id: string }) {
       aside={timeline ? `${timeline.shift.name} · ${timeline.shift.startLabel}–${timeline.shift.endLabel}` : undefined}
     >
       <div className="px-4 py-3">
-        <OperationTimeline data={timeline} />
+        <OperationTimeline
+          data={timeline}
+          machineId={machine.id}
+          outputUnit={machine.outputUnit}
+          speed={isActive ? (live?.speed ?? null) : null}
+        />
       </div>
     </Card>
   );
@@ -335,6 +344,7 @@ export default function MachineDetail({ id }: { id: string }) {
         <h2 className={`text-xl font-semibold ${isActive ? "text-(--brand-ink)" : "text-slate-400"}`}>{machine.machineNo}</h2>
         <span className="text-sm text-slate-500">{machine.machineName}</span>
         <StatusPill status={status} inactive={!isActive} />
+        {isActive && live?.speed && <SpeedBadge speed={live.speed} outputUnit={machine.outputUnit} />}
         {isActive && (
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -347,6 +357,14 @@ export default function MachineDetail({ id }: { id: string }) {
         )}
         {isActive && !oeeEnabled && (
           <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Status only · OEE disabled</span>
+        )}
+        {isActive && (
+          <Link
+            href={`/historical/trend?machine=${encodeURIComponent(machine.id)}`}
+            className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-(--brand) hover:underline"
+          >
+            <ChartLine size={15} /> Open trend
+          </Link>
         )}
       </div>
 

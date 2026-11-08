@@ -4,6 +4,13 @@ import { useState } from "react";
 import { withUnit, type ProductionUnits } from "@/lib/production-units";
 
 const hourFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dayFmt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" });
+const dayLongFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+
+/** Size of a trend point: an hour, or a production day (its start is on the production date). */
+export type Bucket = "hour" | "day";
+const axisLabel = (start: string, bucket: Bucket) => (bucket === "hour" ? hourFmt : dayFmt).format(new Date(start));
+const tooltipLabel = (start: string, bucket: Bucket) => (bucket === "hour" ? hourFmt : dayLongFmt).format(new Date(start));
 const fmt = new Intl.NumberFormat("en-US");
 
 const W = 640;
@@ -20,8 +27,20 @@ function niceMax(value: number) {
   return unit * 4;
 }
 
-function Axes({ max, hours, format }: { max: number; hours: string[]; format: (v: number) => string }) {
-  const slot = plotW / hours.length;
+function Axes({
+  max,
+  starts,
+  bucket,
+  format,
+}: {
+  max: number;
+  starts: string[];
+  bucket: Bucket;
+  format: (v: number) => string;
+}) {
+  const slot = plotW / starts.length;
+  // At most about 12 labels.
+  const every = Math.max(1, Math.ceil(starts.length / 12));
   return (
     <g className="text-[10px]" fill="currentColor">
       {[0, 1, 2, 3, 4].map((i) => {
@@ -35,10 +54,10 @@ function Axes({ max, hours, format }: { max: number; hours: string[]; format: (v
           </g>
         );
       })}
-      {hours.map((h, i) =>
-        i % 2 === 0 ? (
+      {starts.map((h, i) =>
+        i % every === 0 ? (
           <text key={h} x={PAD.left + slot * i + slot / 2} y={H - 8} textAnchor="middle" className="fill-slate-400">
-            {hourFmt.format(new Date(h))}
+            {axisLabel(h, bucket)}
           </text>
         ) : null
       )}
@@ -59,14 +78,22 @@ function Tooltip({ x, lines }: { x: number; lines: string[] }) {
   );
 }
 
-/** Hourly OEE line with area; hours without counted time leave a gap. */
-export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: string; oee: number | null }[]; color?: string }) {
+/** OEE line with area per hour or day; points without counted time leave a gap. */
+export function OeeTrendChart({
+  data,
+  bucket,
+  color = "#22A447",
+}: {
+  data: { start: string; oee: number | null }[];
+  bucket: Bucket;
+  color?: string;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const slot = plotW / data.length;
   const x = (i: number) => PAD.left + slot * i + slot / 2;
   const y = (v: number) => PAD.top + plotH - (plotH * Math.min(v, 100)) / 100;
 
-  // Consecutive hours with data form one segment.
+  // Consecutive points with data form one segment.
   const segments: { i: number; v: number }[][] = [];
   data.forEach((d, i) => {
     if (d.oee === null) return;
@@ -78,8 +105,8 @@ export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: strin
 
   return (
     <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="OEE per hour">
-        <Axes max={100} hours={data.map((d) => d.hour)} format={(v) => `${v}%`} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`OEE per ${bucket}`}>
+        <Axes max={100} starts={data.map((d) => d.start)} bucket={bucket} format={(v) => `${v}%`} />
         {segments.map((seg) => {
           const line = seg.map((p) => `${x(p.i)},${y(p.v)}`).join(" ");
           const area = `${x(seg[0].i)},${y(0)} ${line} ${x(seg.at(-1)!.i)},${y(0)}`;
@@ -99,7 +126,7 @@ export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: strin
         )}
         {data.map((d, i) => (
           <rect
-            key={d.hour}
+            key={d.start}
             x={PAD.left + slot * i}
             y={PAD.top}
             width={slot}
@@ -111,7 +138,7 @@ export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: strin
         ))}
       </svg>
       {h && hover !== null && (
-        <Tooltip x={x(hover)} lines={[hourFmt.format(new Date(h.hour)), h.oee === null ? "No data" : `OEE ${h.oee.toFixed(1)}%`]} />
+        <Tooltip x={x(hover)} lines={[tooltipLabel(h.start, bucket), h.oee === null ? "No data" : `OEE ${h.oee.toFixed(1)}%`]} />
       )}
     </div>
   );
@@ -120,18 +147,21 @@ export function OeeTrendChart({ data, color = "#22A447" }: { data: { hour: strin
 const OUTPUT_COLOR = "#1E6FD9";
 const REJECT_COLOR = "#E5484D";
 
-/** Output and reject per hour as paired bars on one axis. */
+/** Output and reject per hour or day as paired bars on one axis. */
 export function OutputRejectChart({
   data,
+  bucket,
   units,
 }: {
-  data: { hour: string; output: number; reject: number }[];
+  data: { start: string; output: number; reject: number }[];
+  bucket: Bucket;
   units: ProductionUnits;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = niceMax(Math.max(...data.map((d) => Math.max(d.output, d.reject))));
   const slot = plotW / data.length;
-  const barW = Math.max(3, Math.min(10, slot / 2 - 3));
+  // Bars stay inside their slot, which is narrow for long day ranges.
+  const barW = Math.min(10, Math.max(3, slot / 2 - 3), slot / 2 - 0.5);
   const y = (v: number) => PAD.top + plotH - (plotH * v) / max;
   const h = hover !== null ? data[hover] : null;
 
@@ -153,12 +183,12 @@ export function OutputRejectChart({
           <span className="size-2.5 rounded-full" style={{ background: REJECT_COLOR }} /> Reject
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Output and reject per hour">
-        <Axes max={max} hours={data.map((d) => d.hour)} format={(v) => fmt.format(Math.round(v))} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Output and reject per ${bucket}`}>
+        <Axes max={max} starts={data.map((d) => d.start)} bucket={bucket} format={(v) => fmt.format(Math.round(v))} />
         {data.map((d, i) => {
           const center = PAD.left + slot * i + slot / 2;
           return (
-            <g key={d.hour}>
+            <g key={d.start}>
               {hover === i && <rect x={PAD.left + slot * i} y={PAD.top} width={slot} height={plotH} style={{ fill: "var(--color-slate-100)" }} />}
               {bar(center - barW - 1, d.output, OUTPUT_COLOR)}
               {bar(center + 1, d.reject, REJECT_COLOR)}
@@ -179,7 +209,7 @@ export function OutputRejectChart({
         <Tooltip
           x={PAD.left + slot * hover + slot / 2}
           lines={[
-            hourFmt.format(new Date(h.hour)),
+            tooltipLabel(h.start, bucket),
             `Output ${withUnit(fmt.format(h.output), units.output)}`,
             `Reject ${withUnit(fmt.format(h.reject), units.reject)}`,
           ]}

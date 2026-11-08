@@ -8,11 +8,12 @@ import { dashboardStatus, type LiveMachine } from "@/hooks/useLiveMachines";
 import type { LiveStatus } from "@/types/oee";
 import MachineInfoCard from "./MachineInfoCard";
 import SkuImage from "./SkuImage";
+import { SpeedBadge } from "./SpeedIndicator";
 
 const SHOW_DELAY_MS = 250;
 const HIDE_DELAY_MS = 180;
 /** Size of MachineInfoCard, to keep it inside the window. */
-const POPOVER = { width: 256, height: 340 };
+const POPOVER = { width: 256, height: 400 };
 
 /**
  * Shows MachineInfoCard next to the dashboard card on hover, placed where it fits in the window.
@@ -132,6 +133,7 @@ export default function MachineCard({ machine }: { machine: LiveMachine }) {
             <p className="text-xs text-slate-400">Status only</p>
           </div>
         )}
+        {machine.speed && <SpeedBadge speed={machine.speed} outputUnit={machine.outputUnit} className="mt-2" />}
       </Link>
       {popover && (
         <div

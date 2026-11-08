@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { ImagePlus, Loader2, Plus, Trash2 } from "lucide-react";
 import Modal, { buttonStyles } from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
+import { DEFAULT_SCALE_FIELDS } from "@/config/yamato";
 import { REALTIME_MODES, TtlSelect } from "@/lib/realtime-mode";
 import { fileToResizedDataUrl } from "@/lib/image";
 import type {
@@ -13,6 +14,7 @@ import type {
   ProductionTagKey,
   ProductionUnitKey,
 } from "@/types/machine";
+import ScaleSettings, { type ScaleForm } from "./ScaleSettings";
 
 interface MachineFormModalProps {
   machine?: MachineRegistration;
@@ -21,7 +23,7 @@ interface MachineFormModalProps {
   onSubmit: (input: MachineInput) => Promise<void>;
 }
 
-type GeneralFields = Omit<MachineInput, "monitoringTags">;
+type GeneralFields = Omit<MachineInput, "monitoringTags" | "scale">;
 /** `key` is a client-only row key; `id` is set for rows that already exist on the server. */
 type MonitoringRow = { key: number; id?: string; name: string; tagName: string; unit: string };
 
@@ -99,6 +101,7 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
     tagOutput: machine?.tagOutput ?? "",
     tagReject: machine?.tagReject ?? "",
     tagProduct: machine?.tagProduct ?? "",
+    tagSpeed: machine?.tagSpeed ?? "",
     outputUnit: machine?.outputUnit ?? "pcs",
     rejectUnit: machine?.rejectUnit ?? "pcs",
     realtimeMode: machine?.realtimeMode ?? "registered",
@@ -110,6 +113,13 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
   const [rows, setRows] = useState<MonitoringRow[]>(
     () => machine?.monitoringTags.map((t) => ({ key: ++rowSeq, ...t })) ?? []
   );
+  const [scale, setScale] = useState<ScaleForm>(() => ({
+    enabled: machine?.scale?.enabled ?? false,
+    host: machine?.scale?.host ?? "",
+    port: String(machine?.scale?.port ?? 10001),
+    mcSide: machine?.scale?.mcSide ?? "1",
+    fields: machine?.scale?.fields ?? DEFAULT_SCALE_FIELDS,
+  }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -146,6 +156,17 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
       setError(`${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} required`);
       return;
     }
+    const port = Number(scale.port);
+    if (scale.enabled) {
+      const problem = !scale.host.trim()
+        ? "Scale host is required"
+        : !(port >= 1 && port <= 65535)
+          ? "Scale port must be 1 to 65535"
+          : !scale.fields.length
+            ? "Tick at least one scale data field"
+            : null;
+      if (problem) return setError(problem);
+    }
 
     const monitoringTags = rows
       .filter((r) => r.name.trim() || r.tagName.trim())
@@ -154,7 +175,15 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ ...form, monitoringTags });
+      await onSubmit({
+        ...form,
+        monitoringTags,
+        // A scale that was never set up stays null; a switched-off one keeps its settings.
+        scale:
+          scale.enabled || machine?.scale
+            ? { enabled: scale.enabled, host: scale.host.trim(), port: port || 10001, mcSide: scale.mcSide, fields: scale.fields }
+            : null,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save machine");
       setSaving(false);
@@ -293,6 +322,19 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
                 </div>
               </div>
             ))}
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[160px_1fr] sm:gap-4">
+              <label htmlFor="tagSpeed" className="pt-2 text-sm font-medium text-slate-700">
+                Tag Speed <span className="font-normal text-slate-400">(optional)</span>
+                <span className="block text-xs font-normal text-slate-500">Per minute, compared with the SKU spec</span>
+              </label>
+              <TagInput
+                id="tagSpeed"
+                value={form.tagSpeed}
+                onChange={(v) => set("tagSpeed", v)}
+                tagMap={tagMap}
+                placeholder="Leave empty when the machine has no speed tag"
+              />
+            </div>
           </div>
         </Section>
 
@@ -403,6 +445,10 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
               ))}
             </div>
           )}
+        </Section>
+
+        <Section title="Yamato Scale" description="Optional: a Dataweigh scale on this machine, polled by the backend over TCP.">
+          <ScaleSettings value={scale} onChange={setScale} machineNo={form.machineNo.trim()} machineId={machine?.id} />
         </Section>
       </form>
     </Modal>

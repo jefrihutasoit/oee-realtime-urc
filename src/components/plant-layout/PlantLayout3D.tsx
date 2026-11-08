@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import MachineInfoCard, { PIN_STYLES, pinStateOf } from "@/components/dashboard/MachineInfoCard";
@@ -8,13 +8,88 @@ import { useLiveMachines } from "@/hooks/useLiveMachines";
 import { assetUrl } from "@/lib/api";
 import { layoutApi } from "@/lib/layout-api";
 import type { PlantLayout } from "@/types/layout";
-import { loadLayoutImage, PlantScene } from "./plant-scene";
+import { loadLayoutImage, PlantScene, type PlacedMachine } from "./plant-scene";
 import PlantSidePanel from "./PlantSidePanel";
+import { SPEED_COLORS, SpeedIndicator, type SpeedStyle } from "./SpeedSignal";
 import ViewControls from "./ViewControls";
 
 const HIDE_DELAY_MS = 180;
 /** The machine clicked last, kept across visits in this browser. */
 const SELECTED_KEY = "oee-layout-selected";
+/** What the labels show, and how speed looks; kept per browser. */
+const DISPLAY_KEY = "oee-layout-display";
+
+type Show = "status" | "speed" | "both";
+interface Display {
+  show: Show;
+  speedStyle: SpeedStyle;
+}
+const DEFAULT_DISPLAY: Display = { show: "both", speedStyle: "signal" };
+
+function readDisplayRaw(): string | null {
+  try {
+    return localStorage.getItem(DISPLAY_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Follows changes made in other tabs. */
+function subscribeDisplay(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
+function parseDisplay(raw: string | null): Display {
+  try {
+    const saved = JSON.parse(raw ?? "null") as Partial<Display> | null;
+    return {
+      show: saved?.show === "status" || saved?.show === "speed" || saved?.show === "both" ? saved.show : DEFAULT_DISPLAY.show,
+      speedStyle: saved?.speedStyle === "led" || saved?.speedStyle === "signal" ? saved.speedStyle : DEFAULT_DISPLAY.speedStyle,
+    };
+  } catch {
+    return DEFAULT_DISPLAY;
+  }
+}
+
+/** Speed as the stack light: on spec green, below spec amber, otherwise off. */
+const speedLamp: Record<string, PlacedMachine["status"]> = { ok: "RUN", low: "STOP", idle: "NONE", unknown: "NONE" };
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={disabled ? "opacity-50" : undefined}>
+      <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
+      <div className="inline-flex h-10 rounded-lg border border-slate-200 bg-surface p-0.5">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            disabled={disabled}
+            aria-pressed={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={`rounded-md px-3 text-sm font-medium ${
+              value === o.value ? "bg-(--brand) text-white" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function PlantLayout3D() {
   const { machines, connected } = useLiveMachines();
@@ -33,6 +108,19 @@ export default function PlantLayout3D() {
       // Storage blocked: the selection just is not remembered.
     }
   }, []);
+  // The saved choice, read through the store so the server render (default) and hydration match.
+  const savedDisplay = useSyncExternalStore(subscribeDisplay, readDisplayRaw, () => null);
+  const [override, setOverride] = useState<Display | null>(null);
+  const display = useMemo(() => override ?? parseDisplay(savedDisplay), [override, savedDisplay]);
+  const setDisplay = (patch: Partial<Display>) => {
+    const next = { ...display, ...patch };
+    setOverride(next);
+    try {
+      localStorage.setItem(DISPLAY_KEY, JSON.stringify(next));
+    } catch {
+      // Storage blocked: the choice lasts for this visit only.
+    }
+  };
   const [layout, setLayout] = useState<PlantLayout | null>(null);
   /** Uploaded layout image; null shows the built-in model, undefined while it loads. */
   const [image, setImage] = useState<HTMLImageElement | null | undefined>(undefined);
@@ -101,6 +189,17 @@ export default function PlantLayout3D() {
     sceneRef.current?.setMachines(
       placed.map(({ marker, machine }) => {
         const state = pinStateOf(machine);
+        // Speed only: the 3D marks follow the speed (machines without a speed tag keep their status).
+        if (display.show === "speed" && machine.isActive && machine.speed) {
+          return {
+            id: machine.id,
+            x: marker.x,
+            y: marker.y,
+            color: SPEED_COLORS[machine.speed.state],
+            status: speedLamp[machine.speed.state],
+            dim: false,
+          };
+        }
         return {
           id: machine.id,
           x: marker.x,
@@ -111,7 +210,7 @@ export default function PlantLayout3D() {
         };
       }),
     );
-  }, [placed, ready, image]);
+  }, [placed, ready, image, display.show]);
 
   useEffect(() => sceneRef.current?.setHovered(hovered), [hovered]);
   useEffect(() => sceneRef.current?.setHomeView(layout?.view ?? null), [layout, ready, image]);
@@ -150,12 +249,34 @@ export default function PlantLayout3D() {
             </span>
           </h2>
         </div>
-        <Link
-          href="/settings/layout"
-          className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-surface px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Edit layout
-        </Link>
+        <div className="flex flex-wrap items-end gap-3">
+          <Segmented
+            label="Show"
+            value={display.show}
+            onChange={(show) => setDisplay({ show })}
+            options={[
+              { value: "status", label: "Status" },
+              { value: "speed", label: "Speed" },
+              { value: "both", label: "Status + Speed" },
+            ]}
+          />
+          <Segmented
+            label="Speed style"
+            value={display.speedStyle}
+            onChange={(speedStyle) => setDisplay({ speedStyle })}
+            disabled={display.show === "status"}
+            options={[
+              { value: "led", label: "LED" },
+              { value: "signal", label: "Signal" },
+            ]}
+          />
+          <Link
+            href="/settings/layout"
+            className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-surface px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Edit layout
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -185,6 +306,11 @@ export default function PlantLayout3D() {
                   const state = pinStateOf(machine);
                   const { color, label } = PIN_STYLES[state];
                   const open = hovered === machine.id;
+                  const speed = machine.isActive ? machine.speed : null;
+                  // Machines without a speed tag show their status in every mode.
+                  const showStatus = display.show !== "speed" || !speed;
+                  const showSpeed = display.show !== "status" && !!speed;
+                  const accent = showStatus || !speed ? color : SPEED_COLORS[speed.state];
                   const isSelected = selectedId === machine.id;
                   return (
                     <div
@@ -201,17 +327,29 @@ export default function PlantLayout3D() {
                         aria-pressed={isSelected}
                         onFocus={() => show(machine.id)}
                         onBlur={scheduleHide}
-                        className={`flex items-center gap-1.5 rounded-full border-2 bg-surface px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-slate-900 shadow-md ${
+                        className={`flex flex-col items-center rounded-lg border-2 bg-surface px-2 py-0.5 text-[11px] leading-tight font-bold whitespace-nowrap text-slate-900 shadow-md ${
                           state === "INACTIVE" ? "opacity-60" : ""
                         } ${isSelected ? "scale-110 ring-2 ring-(--brand) ring-offset-1" : ""}`}
-                        style={{ borderColor: color, boxShadow: `0 0 10px ${color}88`, zoom: layout.markerSize }}
+                        style={{ borderColor: accent, boxShadow: `0 0 10px ${accent}88`, zoom: layout.markerSize }}
                       >
-                        <span
-                          className={`size-2 rounded-full ${state === "STOP" ? "animate-pulse" : ""}`}
-                          style={{ background: color }}
-                        />
-                        {machine.machineNo}
-                        <span className="font-medium text-slate-500">{label}</span>
+                        <span className="flex items-center gap-1.5">
+                          {showStatus && (
+                            <span
+                              className={`size-2 rounded-full ${state === "STOP" ? "animate-pulse" : ""}`}
+                              style={{ background: color }}
+                            />
+                          )}
+                          {machine.machineNo}
+                          {showSpeed && speed && display.speedStyle === "led" && (
+                            <SpeedIndicator style="led" speed={speed} outputUnit={machine.outputUnit} />
+                          )}
+                        </span>
+                        {showStatus && <span className="text-[10px] font-medium text-slate-500">{label}</span>}
+                        {showSpeed && speed && display.speedStyle === "signal" && (
+                          <span className="mt-0.5">
+                            <SpeedIndicator style="signal" speed={speed} outputUnit={machine.outputUnit} />
+                          </span>
+                        )}
                       </button>
                       {open && (
                         <div

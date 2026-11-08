@@ -5,7 +5,7 @@ import { apiGet } from "@/lib/api";
 import { machineApi } from "@/lib/machine-api";
 import { getSocket } from "@/lib/socket";
 import type { MachineRegistration } from "@/types/machine";
-import type { LiveStatus, MachineOee } from "@/types/oee";
+import type { LiveStatus, MachineOee, MachineSpeed } from "@/types/oee";
 
 /**
  * A registered machine with its live data. Inactive machines are included (shown disabled) but have
@@ -22,6 +22,8 @@ export interface LiveMachine {
   outputUnit: string;
   rejectUnit: string;
   status: LiveStatus | null;
+  /** Speed against the SKU spec, also for status-only machines; null without a speed tag. */
+  speed: MachineSpeed | null;
   live: MachineOee | null;
 }
 
@@ -104,6 +106,7 @@ export function useLiveMachines() {
             outputUnit: m.outputUnit,
             rejectUnit: m.rejectUnit,
             status: entry?.status ?? null,
+            speed: entry?.speed ?? null,
             live: entry?.oeeEnabled && m.oeeEnabled ? entry : null,
           };
         })
