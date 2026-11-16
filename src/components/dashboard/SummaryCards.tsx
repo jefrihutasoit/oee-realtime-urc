@@ -46,18 +46,20 @@ function OeeRing({ value }: { value: number }) {
 }
 
 export default function SummaryCards({ machines }: { machines: LiveMachine[] }) {
-  // Only active machines count. Status totals include status-only machines; OEE figures do not.
+  // Only active machines count. Status totals include every active machine; OEE, output and reject
+  // totals leave out machines with OEE disabled (excluded from summary).
   const name = useMachineLabel();
   const active = machines.filter((m) => m.isActive);
   const inactive = machines.length - active.length;
-  const live = active.flatMap((m) => (m.live ? [m.live] : []));
+  const included = active.filter((m) => m.oeeEnabled);
+  const live = included.flatMap((m) => (m.live ? [m.live] : []));
   // Machines that have not counted anything yet (e.g. waiting for a SKU) would pull the average to 0.
   const counted = live.filter((m) => m.countedSeconds > 0);
   const avgOee = counted.length ? counted.reduce((s, m) => s + m.oee, 0) / counted.length : 0;
   const output = live.reduce((s, m) => s + m.output, 0);
   const reject = live.reduce((s, m) => s + m.reject, 0);
   // A total shows a unit only when every machine in it uses the same one.
-  const withLive = active.filter((m) => m.live);
+  const withLive = included.filter((m) => m.live);
   const common = (units: string[]) => (units.length && units.every((u) => u === units[0]) ? units[0] : "");
   const outputUnit = common(withLive.map((m) => m.outputUnit));
   const rejectUnit = common(withLive.map((m) => m.rejectUnit));

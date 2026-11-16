@@ -34,8 +34,8 @@ export default function PlantSidePanel({
   ];
   const noData = count(["NO_DATA"]);
 
-  // Current OEE runs (since shift start, SKU change or a finish rule).
-  const live = active.filter((m) => m.live);
+  // Current OEE runs (since shift start, SKU change or a finish rule); machines with OEE disabled are left out.
+  const live = active.filter((m) => m.oeeEnabled && m.live);
   const downtime = live.reduce((s, m) => s + m.live!.stopSeconds, 0);
   const stops = live.reduce((s, m) => s + m.live!.stopCount, 0);
   const output = live.reduce((s, m) => s + m.live!.output, 0);

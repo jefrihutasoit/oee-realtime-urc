@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChartLine, Loader2, Package } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ChartLine, ChevronDown, Loader2, Package } from "lucide-react";
+import { machineApi } from "@/lib/machine-api";
+import type { MachineRegistration } from "@/types/machine";
 import { OEE_TARGET, oeeWaitLabel, statusStyles } from "@/config/oee";
 import { scaleTags } from "@/config/yamato";
 import { StatusPill } from "@/components/dashboard/MachineCard";
@@ -201,6 +204,55 @@ function Logs({
   );
 }
 
+const machineSort = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** Machine number + name as a dropdown: picking another machine opens its detail page. */
+function MachineSwitcher({
+  current,
+  isActive,
+  label,
+}: {
+  current: MachineRegistration;
+  isActive: boolean;
+  label: string;
+}) {
+  const router = useRouter();
+  const [machines, setMachines] = useState<MachineRegistration[]>([]);
+
+  useEffect(() => {
+    machineApi
+      .list()
+      .then((list) => setMachines([...list].sort((a, b) => machineSort.compare(a.machineNo, b.machineNo))))
+      .catch(() => {});
+  }, []);
+
+  const options = machines.some((m) => m.id === current.id) ? machines : [current, ...machines];
+
+  return (
+    <div className="relative">
+      <select
+        aria-label={`Select ${label.toLowerCase()}`}
+        value={current.id}
+        onChange={(e) => router.push(`/dashboard/machine/${encodeURIComponent(e.target.value)}`)}
+        className={`cursor-pointer appearance-none rounded-md border border-slate-200 bg-(--color-surface) py-1 pr-8 pl-2.5 text-xl font-semibold hover:border-(--brand) focus:border-(--brand) focus:outline-none ${
+          isActive ? "text-(--brand-ink)" : "text-slate-400"
+        }`}
+      >
+        {options.map((m) => (
+          <option key={m.id} value={m.id} className="bg-(--color-surface) text-base font-normal text-slate-900">
+            {m.machineNo} — {m.machineName}
+            {m.isActive ? "" : " (inactive)"}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={16}
+        className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-slate-500"
+      />
+    </div>
+  );
+}
+
 export default function MachineDetail({ id }: { id: string }) {
   const { machine, error, live, monitoring, history, timeline, skus, connected, reload } = useMachineDetail(id);
   const name = useMachineLabel();
@@ -232,9 +284,9 @@ export default function MachineDetail({ id }: { id: string }) {
 
   const { isActive, oeeEnabled } = machine;
   const status = isActive ? (live?.status ?? null) : null;
-  // OEE figures only exist for active machines with OEE enabled.
-  const oee = isActive && oeeEnabled && live?.oeeEnabled ? live : null;
-  const showOee = isActive && oeeEnabled;
+  // OEE is captured for every active machine; "OEE disabled" only leaves it out of summaries.
+  const oee = isActive ? live : null;
+  const showOee = isActive;
   const productCode = oee && oee.sku.code !== "-" ? oee.sku.code : null;
   const sku = productCode ? skus.find((s) => s.skuId.toLowerCase() === productCode.toLowerCase()) : undefined;
   const oeeColor = oee ? (oee.oee >= OEE_TARGET ? "#22A447" : oee.oee >= 60 ? "#F5A524" : "#E5484D") : "#94A3B8";
@@ -341,8 +393,7 @@ export default function MachineDetail({ id }: { id: string }) {
         >
           <ArrowLeft size={18} />
         </Link>
-        <h2 className={`text-xl font-semibold ${isActive ? "text-(--brand-ink)" : "text-slate-400"}`}>{machine.machineNo}</h2>
-        <span className="text-sm text-slate-500">{machine.machineName}</span>
+        <MachineSwitcher current={machine} isActive={isActive} label={name.one} />
         <StatusPill status={status} inactive={!isActive} />
         {isActive && live?.speed && <SpeedBadge speed={live.speed} outputUnit={machine.outputUnit} />}
         {isActive && (
@@ -356,7 +407,7 @@ export default function MachineDetail({ id }: { id: string }) {
           </span>
         )}
         {isActive && !oeeEnabled && (
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Status only · OEE disabled</span>
+          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">OEE disabled · excluded from summary</span>
         )}
         {isActive && (
           <Link

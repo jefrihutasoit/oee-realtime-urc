@@ -226,7 +226,7 @@ export default function Simulator() {
                   </span>
                 )}
                 {m.isActive && !m.oeeEnabled && (
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">Status only (OEE off)</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">OEE off · excluded from summary</span>
                 )}
               </header>
 

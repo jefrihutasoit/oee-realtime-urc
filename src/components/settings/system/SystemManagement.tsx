@@ -4,20 +4,23 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SettingsBackup from "@/components/settings/backup/SettingsBackup";
 import DatabaseMaintenance from "@/components/settings/database/DatabaseMaintenance";
+import LicensePanel from "@/components/license/LicensePanel";
 import { useAuth } from "@/lib/auth";
+import { useLicense } from "@/lib/license";
 import { systemApi } from "@/lib/system-api";
 import type { Permission } from "@/types/auth";
 import AppearanceForm from "./AppearanceForm";
 import DatabaseConnection from "./DatabaseConnection";
 import SystemLog from "./SystemLog";
 
-type TabKey = "backup" | "database" | "connection" | "log" | "theme";
+type TabKey = "backup" | "database" | "connection" | "log" | "license" | "theme";
 
 const TABS: { key: TabKey; label: string; permission: Permission; /** Works while the database is down. */ setup?: boolean }[] = [
   { key: "backup", label: "Backup & Restore", permission: "backup.manage" },
   { key: "database", label: "Database", permission: "database.manage" },
   { key: "connection", label: "Database Connection", permission: "database.manage", setup: true },
   { key: "log", label: "System Log", permission: "database.manage", setup: true },
+  { key: "license", label: "License", permission: "database.manage", setup: true },
   { key: "theme", label: "Theme", permission: "appearance.manage" },
 ];
 
@@ -27,6 +30,7 @@ export default function SystemManagement() {
   const router = useRouter();
   const pathname = usePathname();
   const [dbReady, setDbReady] = useState(true);
+  const license = useLicense();
 
   useEffect(() => {
     systemApi
@@ -75,6 +79,14 @@ export default function SystemManagement() {
       {tab?.key === "database" && <DatabaseMaintenance />}
       {tab?.key === "connection" && <DatabaseConnection onStatus={setDbReady} />}
       {tab?.key === "log" && <SystemLog />}
+      {tab?.key === "license" &&
+        (license.status === "ready" ? (
+          <div className="max-w-2xl">
+            <LicensePanel data={license.data} />
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">{license.status === "error" ? license.message : "Loading…"}</p>
+        ))}
       {tab?.key === "theme" && <AppearanceForm />}
     </div>
   );

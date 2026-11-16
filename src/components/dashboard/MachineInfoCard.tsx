@@ -51,8 +51,6 @@ export default function MachineInfoCard({ machine, className = "w-64 shadow-xl" 
 
       {!machine.isActive ? (
         <p className="px-3 py-3 text-xs text-slate-500">{name.one} is inactive.</p>
-      ) : !machine.oeeEnabled ? (
-        <p className="px-3 py-3 text-xs text-slate-500">Status only – OEE is disabled for this {name.one.toLowerCase()}.</p>
       ) : !live ? (
         <p className="px-3 py-3 text-xs text-slate-500">Waiting for the first OEE calculation…</p>
       ) : (

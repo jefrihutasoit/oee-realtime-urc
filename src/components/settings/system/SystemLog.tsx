@@ -18,6 +18,8 @@ const TYPE_STYLE: Record<SystemEventType, { label: string; cls: string }> = {
   DB_SETTINGS_CHANGED: { label: "DB settings", cls: "bg-blue-50 text-blue-700" },
   SETTINGS_RESTORED: { label: "Settings restored", cls: "bg-amber-50 text-amber-800" },
   DATABASE_RESTORED: { label: "Database restored", cls: "bg-amber-50 text-amber-800" },
+  LICENSE_INSTALLED: { label: "License installed", cls: "bg-emerald-50 text-emerald-700" },
+  LICENSE_INVALID: { label: "License invalid", cls: "bg-red-50 text-red-700" },
 };
 
 const FILTERS: { label: string; types?: SystemEventType[] }[] = [
@@ -26,6 +28,7 @@ const FILTERS: { label: string; types?: SystemEventType[] }[] = [
   { label: "Unexpected shutdowns", types: ["UNEXPECTED_SHUTDOWN"] },
   { label: "Database", types: ["DB_CONNECTED", "DB_UNAVAILABLE", "DB_SETTINGS_CHANGED"] },
   { label: "Restores", types: ["SETTINGS_RESTORED", "DATABASE_RESTORED"] },
+  { label: "License", types: ["LICENSE_INSTALLED", "LICENSE_INVALID"] },
 ];
 
 function duration(seconds: number) {

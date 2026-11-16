@@ -1,4 +1,4 @@
-import { getToken, sessionExpired } from "@/lib/session";
+import { getToken, licenseRequired, sessionExpired } from "@/lib/session";
 
 /** Defaults to "/api" on the page's own host, which Next proxies to the backend (see next.config.ts). */
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
@@ -26,6 +26,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
   const body = await res.json().catch(() => null);
   if (res.status === 401 && token && path !== "/auth/login") sessionExpired();
+  if (res.status === 403 && body?.code === "LICENSE_REQUIRED") licenseRequired();
   if (!res.ok) throw new Error(body?.error ?? `API error ${res.status}: ${path}`);
   return body as T;
 }

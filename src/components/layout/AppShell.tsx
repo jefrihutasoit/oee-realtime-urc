@@ -3,11 +3,14 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { DatabaseZap, Loader2, Lock } from "lucide-react";
+import { DatabaseZap, Loader2, Lock, LogOut } from "lucide-react";
+import LicensePanel from "@/components/license/LicensePanel";
 import { canOpen, isPublicPath } from "@/config/access";
 import { useAppearance } from "@/lib/appearance";
-import { useAuth } from "@/lib/auth";
+import { logout, useAuth } from "@/lib/auth";
+import { useLicense } from "@/lib/license";
 import { systemApi } from "@/lib/system-api";
+import type { LicenseStatus } from "@/types/license";
 import type { SystemStatus } from "@/types/system";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
@@ -62,6 +65,35 @@ function DatabaseBanner() {
   );
 }
 
+/** Full-screen lock while the system has no valid license. */
+function LicenseScreen({ data }: { data: LicenseStatus }) {
+  const { user } = useAuth();
+  return (
+    <div className="min-h-screen overflow-y-auto bg-(--app-bg) px-4 py-10">
+      <div className="mx-auto max-w-xl space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">OEE Monitoring</p>
+            <h1 className="text-2xl font-semibold text-slate-900">License required</h1>
+            <p className="mt-1 text-sm text-slate-500">A valid license is required to use this application.</p>
+          </div>
+          {user && (
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900"
+            >
+              <LogOut size={15} /> Sign out
+            </button>
+          )}
+        </div>
+        {user && <p className="text-xs text-slate-500">Signed in as {user.name}</p>}
+        <LicensePanel data={data} />
+      </div>
+    </div>
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -89,6 +121,8 @@ function Shell({ children }: { children: React.ReactNode }) {
  */
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status, user } = useAuth();
+  const license = useLicense();
+  const unlicensed = license.status === "ready" && !license.data.licensed;
   // Loads the saved theme and keeps <html data-theme> in step with it.
   useAppearance();
   const pathname = usePathname();
@@ -97,14 +131,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const guestAllowed = isPublicPath(pathname);
 
   useEffect(() => {
-    if (status === "anon" && !onLogin && !guestAllowed) {
+    if (status === "anon" && !onLogin && !guestAllowed && !unlicensed) {
       router.replace(`${LOGIN_PATH}?next=${encodeURIComponent(pathname)}`);
     }
     if (status === "user" && onLogin) router.replace("/");
-  }, [status, onLogin, guestAllowed, pathname, router]);
+  }, [status, onLogin, guestAllowed, unlicensed, pathname, router]);
 
   if (onLogin) return status === "user" ? <FullScreenLoader /> : children;
-  if (status === "loading" || (status === "anon" && !guestAllowed)) return <FullScreenLoader />;
+  if (status === "loading" || license.status === "loading") return <FullScreenLoader />;
+  // Without a license the backend blocks everything: only the hardware ID and the license import are shown.
+  if (license.status === "ready" && !license.data.licensed) return <LicenseScreen data={license.data} />;
+  if (status === "anon" && !guestAllowed) return <FullScreenLoader />;
 
   return (
     <Shell>

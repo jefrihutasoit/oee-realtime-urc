@@ -27,3 +27,11 @@ export const sessionExpired = () => onUnauthorized();
 export const setUnauthorizedHandler = (handler: () => void) => {
   onUnauthorized = handler;
 };
+
+let onLicenseRequired: () => void = () => {};
+
+/** Called by the API client when the backend refuses a request because the system is not licensed. */
+export const licenseRequired = () => onLicenseRequired();
+export const setLicenseRequiredHandler = (handler: () => void) => {
+  onLicenseRequired = handler;
+};

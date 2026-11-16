@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import UserMenu from "@/components/auth/UserMenu";
 
 // Snapshot is the current minute so the clock re-renders at most once per minute.
@@ -46,15 +46,6 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
           </>
         )}
       </div>
-
-      <button
-        type="button"
-        className="relative rounded-md p-2 text-slate-600 hover:bg-slate-100"
-        aria-label="Notifications"
-      >
-        <Bell size={20} />
-        <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-red-500" />
-      </button>
 
       <UserMenu />
     </header>

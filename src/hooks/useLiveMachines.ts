@@ -9,7 +9,8 @@ import type { LiveStatus, MachineOee, MachineSpeed } from "@/types/oee";
 
 /**
  * A registered machine with its live data. Inactive machines are included (shown disabled) but have
- * no status. `live` holds the OEE figures and is null when OEE is disabled or not received yet.
+ * no status. `live` holds the OEE figures and is null until received. `oeeEnabled` false = the machine's
+ * OEE is still shown on its own, but left out of every summary.
  */
 export interface LiveMachine {
   id: string;
@@ -107,7 +108,8 @@ export function useLiveMachines() {
             rejectUnit: m.rejectUnit,
             status: entry?.status ?? null,
             speed: entry?.speed ?? null,
-            live: entry?.oeeEnabled && m.oeeEnabled ? entry : null,
+            // OEE is captured for every machine; summaries skip those with OEE disabled (`oeeEnabled`).
+            live: entry,
           };
         })
         // Inactive machines go last.

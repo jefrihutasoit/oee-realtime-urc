@@ -269,13 +269,17 @@ export default function Dashboard() {
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    {m.isActive && m.oeeEnabled ? (
-                      <span className="flex items-center gap-2">
+                    {m.isActive ? (
+                      <span
+                        className="flex items-center gap-2"
+                        title={m.oeeEnabled ? undefined : "OEE disabled: excluded from summary"}
+                      >
                         <span className="w-14 shrink-0 font-medium text-slate-900">{oeeLabel(m)}</span>
                         <OeeBar value={m.live?.oee ?? 0} />
+                        {!m.oeeEnabled && <span className="shrink-0 text-[11px] text-slate-400">Excl.</span>}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">{m.isActive ? "Status only" : "Disabled"}</span>
+                      <span className="text-xs text-slate-400">Disabled</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right text-slate-600">

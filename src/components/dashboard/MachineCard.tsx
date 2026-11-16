@@ -111,28 +111,21 @@ export default function MachineCard({ machine }: { machine: LiveMachine }) {
       >
         {header}
 
-        {machine.oeeEnabled ? (
-          <div className="mt-2 flex items-end gap-3">
-            <div className="min-w-0 flex-1">
-              <p
-                className={`font-semibold tabular-nums ${live ? "text-lg text-slate-900" : "py-0.5 text-sm text-slate-400"}`}
-              >
-                {oeeLabel(machine)}
-              </p>
-              <div className="mt-1.5">
-                <OeeBar value={live?.oee ?? 0} />
-              </div>
-              {waitLabel && <p className="mt-1 truncate text-[11px] font-medium text-amber-600">{waitLabel}</p>}
+        <div className="mt-2 flex items-end gap-3">
+          <div className="min-w-0 flex-1">
+            <p
+              className={`font-semibold tabular-nums ${live ? "text-lg text-slate-900" : "py-0.5 text-sm text-slate-400"}`}
+            >
+              {oeeLabel(machine)}
+            </p>
+            <div className="mt-1.5">
+              <OeeBar value={live?.oee ?? 0} />
             </div>
-            <SkuImage sku={live?.sku} className="h-10 w-10" />
+            {waitLabel && <p className="mt-1 truncate text-[11px] font-medium text-amber-600">{waitLabel}</p>}
+            {!machine.oeeEnabled && <p className="mt-1 truncate text-[11px] text-slate-400">Excluded from summary</p>}
           </div>
-        ) : (
-          // Status-only machine: no OEE figures at all.
-          <div className="mt-2">
-            <p className="truncate text-sm text-slate-600">{machine.machineName}</p>
-            <p className="text-xs text-slate-400">Status only</p>
-          </div>
-        )}
+          <SkuImage sku={live?.sku} className="h-10 w-10" />
+        </div>
         {machine.speed && <SpeedBadge speed={machine.speed} outputUnit={machine.outputUnit} className="mt-2" />}
       </Link>
       {popover && (

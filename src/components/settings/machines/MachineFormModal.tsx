@@ -286,7 +286,7 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                   <div>
                     <p className="text-sm font-medium text-slate-700">OEE Enabled</p>
-                    <p className="text-xs text-slate-500">Include this machine in OEE calculation.</p>
+                    <p className="text-xs text-slate-500">OEE is always captured; when off, this machine is excluded from the summary.</p>
                   </div>
                   <Toggle label="OEE enabled" checked={form.oeeEnabled} onChange={(v) => set("oeeEnabled", v)} />
                 </div>
