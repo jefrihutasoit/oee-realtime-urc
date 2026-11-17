@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, Box, Factory, FileSpreadsheet, Gauge, Loader2, Refr
 import { SPEED_STYLES } from "@/components/dashboard/SpeedIndicator";
 import DateRangeInput from "@/components/ui/DateRangeInput";
 import { buttonStyles } from "@/components/ui/Modal";
-import { downtimeTypeColors, downtimeTypeLabel, minutesLabel } from "@/config/downtime";
+import { DOWNTIME_CATEGORIES, downtimeTypeColors, downtimeTypeLabel, minutesLabel } from "@/config/downtime";
 import { OEE_TARGET, statusStyles } from "@/config/oee";
 import { useLiveMachines } from "@/hooks/useLiveMachines";
 import { useMachineLabel } from "@/lib/machine-label";
@@ -14,6 +14,7 @@ import { todayYmd } from "@/lib/reject-sheet";
 import { summaryApi } from "@/lib/summary-api";
 import { useProductionUnits, withUnit } from "@/lib/production-units";
 import type { DailySummary } from "@/types/summary";
+import { MACHINE_CATEGORIES, MACHINE_CATEGORY_LABELS, type MachineCategory } from "@/types/machine";
 import { Donut, OeeTrendChart, OutputRejectChart } from "./SummaryCharts";
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -105,20 +106,23 @@ export default function Summary() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { machines } = useLiveMachines();
-  const name = useMachineLabel();
+  const machineLabel = useMachineLabel();
   const unitsOf = useProductionUnits();
+  // Bagger and Machine Packaging are evaluated separately: ?category=PACKAGING, Bagger by default.
+  const category: MachineCategory = params.get("category") === "PACKAGING" ? "PACKAGING" : "BAGGER";
+  const name = category === "BAGGER" ? machineLabel : { one: "Machine", many: "Machines" };
 
   // One request per range; one that includes today is repeated every LIVE_REFRESH_MS.
   const load = useCallback(() => {
     summaryApi
-      .range(from, to)
+      .range(from, to, category)
       .then((s) => {
         setData(s);
         setError(null);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, category]);
 
   useEffect(() => {
     load();
@@ -127,16 +131,32 @@ export default function Summary() {
     return () => clearInterval(timer);
   }, [load, includesToday]);
 
+  const go = (next: { from: string; to: string; category: MachineCategory }) => {
+    const q = new URLSearchParams();
+    if (!(next.from === today && next.to === today)) {
+      q.set("from", next.from);
+      q.set("to", next.to);
+    }
+    if (next.category !== "BAGGER") q.set("category", next.category);
+    router.replace(q.size ? `${pathname}?${q}` : pathname);
+  };
+
   const setRange = (r: { from: string; to: string }) => {
     // A cleared input keeps the current range.
     if (!r.from || !r.to) return;
     const [a, b] = [r.from, r.to].sort();
-    router.replace(a === today && b === today ? pathname : `${pathname}?from=${a}&to=${b}`);
+    go({ from: a, to: b, category });
   };
 
-  // Live machine status (today only). Breakdown is the Off of the status tag here.
+  // Live machines of the selected category; like the rest of the summary, OEE-disabled ones are not counted.
+  const counted = useMemo(
+    () => (machines ?? []).filter((m) => m.isActive && m.oeeEnabled && m.category === category),
+    [machines, category]
+  );
+
+  // Live machine status (today only), both categories together. Breakdown is the Off of the status tag here.
   const live = useMemo(() => {
-    const active = (machines ?? []).filter((m) => m.isActive && m.status);
+    const active = (machines ?? []).filter((m) => m.isActive && m.oeeEnabled && m.status);
     const count = (st: "RUN" | "STOP" | "OFF") =>
       active.filter((m) => (m.status === "BREAKDOWN" ? "OFF" : m.status) === st).length;
     return { RUN: count("RUN"), STOP: count("STOP"), OFF: count("OFF"), total: active.length };
@@ -144,10 +164,10 @@ export default function Summary() {
 
   // Live speed against the SKU spec, of the machines with a speed tag.
   const speed = useMemo(() => {
-    const withSpeed = (machines ?? []).filter((m) => m.isActive && m.speed);
+    const withSpeed = counted.filter((m) => m.speed);
     const of = (st: "ok" | "low" | "idle" | "unknown") => withSpeed.filter((m) => m.speed!.state === st);
     return { ok: of("ok"), low: of("low"), idle: of("idle"), unknown: of("unknown"), total: withSpeed.length };
-  }, [machines]);
+  }, [counted]);
 
   const colorOf = useMemo(() => downtimeTypeColors(data?.downtime.byType.map((t) => t.type) ?? []), [data]);
 
@@ -166,7 +186,23 @@ export default function Summary() {
           )}
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 rounded-lg bg-surface p-1 ring-1 ring-slate-200" role="tablist" aria-label="Machine category">
+          {MACHINE_CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={category === c}
+              onClick={() => go({ from, to, category: c })}
+              className={`rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap ${
+                category === c ? "bg-(--brand) text-white" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {MACHINE_CATEGORY_LABELS[c]}
+            </button>
+          ))}
+        </div>
         {!isToday && (
           <button type="button" onClick={() => setRange({ from: today, to: today })} className={buttonStyles.secondary}>
             Today
@@ -190,7 +226,7 @@ export default function Summary() {
     </div>
   );
 
-  if (!data || data.from !== from || data.to !== to) {
+  if (!data || data.from !== from || data.to !== to || data.category !== category) {
     return (
       <div className="space-y-4">
         {header}
@@ -242,7 +278,7 @@ export default function Summary() {
             <Factory size={30} />
           </span>
           <div>
-            <p className={KPI_LABEL}>Total {name.many}</p>
+            <p className={KPI_LABEL}>Total {MACHINE_CATEGORY_LABELS[category]}</p>
             <p className={KPI_VALUE}>{data.activeMachines}</p>
           </div>
         </Card>
@@ -301,8 +337,10 @@ export default function Summary() {
         </Card>
         <Card className="sm:col-span-2 xl:col-span-1">
           <p className={`mb-2 ${KPI_LABEL}`}>
-            {name.one} Status{" "}
-            <span className="font-normal normal-case text-slate-400">{isToday ? "now" : "time share"}</span>
+            Machine Status{" "}
+            <span className="font-normal normal-case text-slate-400">
+              {isToday ? "now" : "time share"} · all categories
+            </span>
           </p>
           <div className="flex justify-around divide-x divide-slate-200">
             {statusSlices.map((s) => (
@@ -410,6 +448,45 @@ export default function Summary() {
 
             <div className="border-t border-slate-100 pt-3">
               <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">Unplanned vs Planned</p>
+                <FromUpload />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(["UNPLANNED", "PLANNED"] as const).map((key) => {
+                  const c = DOWNTIME_CATEGORIES[key];
+                  const v = key === "UNPLANNED" ? data.downtime.unplanned : data.downtime.planned;
+                  return (
+                    <div key={key} className="rounded-lg border border-slate-100 px-3 py-2">
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                        <span className="size-2 rounded-full" style={{ background: c.color }} />
+                        {c.label}
+                      </p>
+                      <p className="text-lg font-bold text-slate-900 tabular-nums">{minutesLabel(v.seconds)}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {v.count}× · {Math.round((v.seconds / (data.downtime.totalSeconds || 1)) * 100)}% · {c.hint}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              {data.downtime.totalSeconds > 0 && (
+                <div className="mt-2 flex h-2 gap-0.5 overflow-hidden rounded-full bg-slate-100">
+                  {(["UNPLANNED", "PLANNED"] as const).map((key) => {
+                    const v = key === "UNPLANNED" ? data.downtime.unplanned : data.downtime.planned;
+                    return (
+                      <div
+                        key={key}
+                        title={`${DOWNTIME_CATEGORIES[key].label}: ${minutesLabel(v.seconds)}`}
+                        style={{ width: `${(v.seconds / data.downtime.totalSeconds) * 100}%`, background: DOWNTIME_CATEGORIES[key].color }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-slate-500">Top Downtime by category</p>
                 <FromUpload />
               </div>
@@ -427,15 +504,15 @@ export default function Summary() {
           </div>
         </Card>
         <Card className="flex flex-col">
-          <Title sub={isToday ? `${name.many} by current status` : `Status time of all ${name.many.toLowerCase()}`}>
-            {name.one} Status Distribution
+          <Title sub={isToday ? "All categories by current status" : "Status time of all categories"}>
+            Machine Status Distribution
           </Title>
           <div className="flex flex-1 flex-wrap items-center justify-center gap-x-6 gap-y-4">
             <Donut
               className="size-44"
               slices={statusSlices}
-              center={isToday ? String(live.total) : minutesLabel(statusTotal / (data.activeMachines || 1))}
-              sub={isToday ? name.many : `avg / ${name.one.toLowerCase()}`}
+              center={isToday ? String(live.total) : minutesLabel(statusTotal / (data.statusMachines || 1))}
+              sub={isToday ? "machines" : "avg / machine"}
             />
             <ul className="min-w-44 flex-1 space-y-3">
               {statusSlices.map((s) => {
@@ -445,7 +522,7 @@ export default function Summary() {
                     <div className="flex items-baseline gap-2">
                       <span className="size-3 shrink-0 self-center rounded-full" style={{ background: s.color }} />
                       <span className="text-[15px] font-medium text-slate-700">{s.label}</span>
-                      <span className="ml-auto text-2xl font-bold text-slate-900 tabular-nums">
+                      <span className="ml-auto text-[clamp(1rem,1.5vw,1.5rem)] font-bold whitespace-nowrap text-slate-900 tabular-nums">
                         {isToday ? s.value : minutesLabel(s.value)}
                       </span>
                       <span className="w-12 text-right text-sm font-medium text-slate-500 tabular-nums">

@@ -7,7 +7,6 @@ import { ChevronDown, X } from "lucide-react";
 import { canOpen } from "@/config/access";
 import { navigation, type NavItem } from "@/config/navigation";
 import { useAuth } from "@/lib/auth";
-import { useMachineLabel } from "@/lib/machine-label";
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -92,12 +91,10 @@ interface SidebarProps {
 function NavItems({ pathname, collapsed }: { pathname: string; collapsed: boolean }) {
   // Only the pages the user's role can open; a group without any is left out.
   const { user } = useAuth();
-  const name = useMachineLabel();
   const items = navigation.flatMap((item): NavItem[] => {
     if (!item.children) return item.href && !canOpen(user, item.href) ? [] : [item];
-    const children = item.children
-      .filter((c) => canOpen(user, c.href))
-      .map((c) => (c.href === "/dashboard/machine" ? { ...c, label: name.one } : c));
+    // The machine dashboard holds every machine (baggers and others), so its menu stays "Machine".
+    const children = item.children.filter((c) => canOpen(user, c.href));
     return children.length ? [{ ...item, children }] : [];
   });
   return items.map((item) => <NavGroup key={item.label} item={item} pathname={pathname} collapsed={collapsed} />);

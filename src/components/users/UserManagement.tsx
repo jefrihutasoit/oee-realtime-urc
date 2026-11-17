@@ -57,8 +57,8 @@ function RolePermissionsEditor({ data, onSaved }: { data: RolesResponse; onSaved
         <div>
           <h3 className="font-semibold text-slate-900">Role Permissions</h3>
           <p className="text-sm text-slate-500">
-            What each role can do. The dashboards are open to every role. Machine settings, status definition, backup
-            &amp; restore and the simulator are only for the Engineering account.
+            What each role can do. The dashboards are open to every role. Machine settings, status definition, the
+            database and the simulator are only for the Engineering account.
           </p>
         </div>
         <button type="button" onClick={save} disabled={!changed || saving} className={buttonStyles.primary}>

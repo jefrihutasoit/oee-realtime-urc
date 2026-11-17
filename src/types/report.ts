@@ -60,6 +60,8 @@ export interface ReportQuery {
   type: ReportType;
   from: string;
   to: string;
+  /** BAGGER or PACKAGING: a report covers one machine category. */
+  category?: string;
   machines?: string;
   skus?: string;
   shift?: string;

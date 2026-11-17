@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { machineApi } from "@/lib/machine-api";
 import { getSocket } from "@/lib/socket";
-import type { MachineRegistration } from "@/types/machine";
+import type { MachineCategory, MachineRegistration } from "@/types/machine";
 import type { LiveStatus, MachineOee, MachineSpeed } from "@/types/oee";
 
 /**
@@ -19,6 +19,8 @@ export interface LiveMachine {
   line: string;
   isActive: boolean;
   oeeEnabled: boolean;
+  /** Bagger or Machine Packaging: each has its own totals. */
+  category: MachineCategory;
   /** Units of the output and reject counters, e.g. "pcs"; "" when none. */
   outputUnit: string;
   rejectUnit: string;
@@ -104,6 +106,7 @@ export function useLiveMachines() {
             line: entry?.line ?? `Line ${m.machineNo[0]}`,
             isActive: m.isActive,
             oeeEnabled: m.oeeEnabled,
+            category: m.category,
             outputUnit: m.outputUnit,
             rejectUnit: m.rejectUnit,
             status: entry?.status ?? null,

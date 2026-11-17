@@ -7,6 +7,7 @@ import Toggle from "@/components/ui/Toggle";
 import { machineApi, type MachineBulkInput } from "@/lib/machine-api";
 import { applyMachineUnits } from "@/lib/production-units";
 import type { GatewayTag, MachineInput, MachineRegistration } from "@/types/machine";
+import { MACHINE_CATEGORY_LABELS } from "@/types/machine";
 import MachineFormModal from "./MachineFormModal";
 import MachineUnitsModal from "./MachineUnitsModal";
 import MachineRealtimeModal from "./MachineRealtimeModal";
@@ -174,7 +175,8 @@ export default function MachineManagement() {
         </div>
         <p className="text-sm text-slate-500">
           {machines.length} registered · {machines.filter((m) => m.isActive).length} active ·{" "}
-          {machines.filter((m) => m.oeeEnabled).length} OEE enabled
+          {machines.filter((m) => m.category === "BAGGER").length} {MACHINE_CATEGORY_LABELS.BAGGER} ·{" "}
+          {machines.filter((m) => m.category === "PACKAGING").length} {MACHINE_CATEGORY_LABELS.PACKAGING}
         </p>
       </div>
 
@@ -185,6 +187,7 @@ export default function MachineManagement() {
               <th className="px-4 py-2.5 font-medium">Photo</th>
               <th className="px-4 py-2.5 font-medium">No</th>
               <th className="px-4 py-2.5 font-medium">Machine Name</th>
+              <th className="px-4 py-2.5 font-medium">Category</th>
               <th className="px-4 py-2.5 font-medium">Production Tags</th>
               <th className="px-4 py-2.5 font-medium">Monitoring</th>
               <th className="px-4 py-2.5 font-medium">Active</th>
@@ -195,14 +198,14 @@ export default function MachineManagement() {
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                   <Loader2 size={20} className="mx-auto mb-2 animate-spin" />
                   Loading machines…
                 </td>
               </tr>
             ) : loadError ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-red-600">
+                <td colSpan={9} className="px-4 py-10 text-center text-red-600">
                   {loadError}
                   <button
                     type="button"
@@ -218,7 +221,7 @@ export default function MachineManagement() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                   {machines.length === 0 ? "No machines registered yet." : "No machines match your search."}
                 </td>
               </tr>
@@ -249,6 +252,19 @@ export default function MachineManagement() {
                     )}
                   </td>
                   <td className="px-4 py-2">{m.machineName}</td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+                        !m.isActive
+                          ? "bg-slate-100 text-slate-400"
+                          : m.category === "BAGGER"
+                            ? "bg-blue-50 text-(--brand)"
+                            : "bg-amber-50 text-amber-800"
+                      }`}
+                    >
+                      {MACHINE_CATEGORY_LABELS[m.category]}
+                    </span>
+                  </td>
                   <td className="px-4 py-2">
                     <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
                       {(

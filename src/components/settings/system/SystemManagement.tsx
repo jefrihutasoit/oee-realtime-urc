@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SettingsBackup from "@/components/settings/backup/SettingsBackup";
-import DatabaseMaintenance from "@/components/settings/database/DatabaseMaintenance";
+import DatabaseMaintenance, { DatabaseBackupCard } from "@/components/settings/database/DatabaseMaintenance";
 import LicensePanel from "@/components/license/LicensePanel";
 import { useAuth } from "@/lib/auth";
 import { useLicense } from "@/lib/license";
@@ -75,7 +75,14 @@ export default function SystemManagement() {
         ))}
       </div>
 
-      {tab?.key === "backup" && <SettingsBackup />}
+      {tab?.key === "backup" && (
+        <div className="space-y-4">
+          <div className="max-w-2xl">
+            <DatabaseBackupCard />
+          </div>
+          <SettingsBackup />
+        </div>
+      )}
       {tab?.key === "database" && <DatabaseMaintenance />}
       {tab?.key === "connection" && <DatabaseConnection onStatus={setDbReady} />}
       {tab?.key === "log" && <SystemLog />}

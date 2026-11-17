@@ -237,6 +237,10 @@ export function Donut({
   const r = 52;
   const c = 2 * Math.PI * r;
   let offset = 0;
+  // The hole is about 80 units wide: shrink the text to fit (a character is ~0.6 of the font size).
+  const HOLE = 72;
+  const centerSize = Math.min(22, HOLE / (Math.max(center.length, 1) * 0.6));
+  const subSize = Math.min(10, HOLE / (Math.max(sub.length, 1) * 0.55));
   return (
     <svg viewBox="0 0 140 140" className={`${className} shrink-0`} role="img" aria-label={`${center} ${sub}`}>
       <circle cx={70} cy={70} r={r} fill="none" style={{ stroke: "var(--color-slate-100)" }} strokeWidth={22} />
@@ -265,10 +269,16 @@ export function Donut({
           offset += len;
           return s.value > 0 ? el : null;
         })}
-      <text x={70} y={68} textAnchor="middle" className="fill-slate-900 text-[22px] font-semibold">
+      <text
+        x={70}
+        y={70 - centerSize * 0.12}
+        textAnchor="middle"
+        className="fill-slate-900 font-semibold"
+        style={{ fontSize: centerSize }}
+      >
         {center}
       </text>
-      <text x={70} y={86} textAnchor="middle" className="fill-slate-500 text-[10px]">
+      <text x={70} y={70 + centerSize * 0.35 + 9} textAnchor="middle" className="fill-slate-500" style={{ fontSize: subSize }}>
         {sub}
       </text>
     </svg>

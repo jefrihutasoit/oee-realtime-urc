@@ -90,11 +90,62 @@ function ConfirmModal({
   );
 }
 
+/**
+ * Full system / database backup download. Shown in Database (Engineering) and in Backup & Restore for roles
+ * with the backup permission; restoring a database stays with the Engineering account.
+ */
+export function DatabaseBackupCard() {
+  const [busy, setBusy] = useState<"backup" | "full" | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  async function backup(full: boolean) {
+    setBusy(full ? "full" : "backup");
+    setNotice(null);
+    try {
+      const name = await (full ? databaseApi.fullBackup() : databaseApi.backup());
+      setNotice({ text: `Saved ${name}`, ok: true });
+    } catch (err) {
+      setNotice({ text: err instanceof Error ? err.message : "Failed", ok: false });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Card icon={<Download size={18} />} title="Full Backup" sub="Every table: settings, users, history, reject and downtime data.">
+      <ul className="space-y-1 text-xs text-slate-500">
+        <li>
+          <strong className="text-slate-700">Full system backup</strong>: the database plus every uploaded file (SKU photos,
+          layout image). Use it to move or rebuild the whole system.
+        </li>
+        <li>
+          <strong className="text-slate-700">Database backup</strong>: the database only, smaller. Uploaded files are not in
+          it.
+        </li>
+      </ul>
+      <p className="text-xs text-slate-500">
+        Both are compressed <code>.jsonl.gz</code> files. They contain user accounts (password hashes) and gateway keys: keep
+        them safe.
+      </p>
+      <NoticeBox notice={notice} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => backup(true)} disabled={busy !== null} className={buttonStyles.primary}>
+          {busy === "full" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+          Download Full Backup
+        </button>
+        <button type="button" onClick={() => backup(false)} disabled={busy !== null} className={buttonStyles.secondary}>
+          {busy === "backup" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+          Database Only
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 export default function DatabaseMaintenance() {
   const [stats, setStats] = useState<DatabaseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"backup" | "full" | "restore" | "clear" | "preview" | "init" | null>(null);
-  const [backupNotice, setBackupNotice] = useState<Notice>(null);
+  const [busy, setBusy] = useState<"restore" | "clear" | "preview" | "init" | null>(null);
   const [restoreNotice, setRestoreNotice] = useState<Notice>(null);
   const [clearNotice, setClearNotice] = useState<Notice>(null);
   const [initNotice, setInitNotice] = useState<Notice>(null);
@@ -119,19 +170,6 @@ export default function DatabaseMaintenance() {
   useEffect(loadStats, [loadStats]);
 
   const message = (err: unknown) => (err instanceof Error ? err.message : "Failed");
-
-  async function backup(full: boolean) {
-    setBusy(full ? "full" : "backup");
-    setBackupNotice(null);
-    try {
-      const name = await (full ? databaseApi.fullBackup() : databaseApi.backup());
-      setBackupNotice({ text: `Saved ${name}`, ok: true });
-    } catch (err) {
-      setBackupNotice({ text: message(err), ok: false });
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function restore() {
     if (!restoreFile) return;
@@ -216,33 +254,7 @@ export default function DatabaseMaintenance() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="space-y-4">
-          <Card icon={<Download size={18} />} title="Backup" sub="Every table: settings, users, history, reject and downtime data.">
-            <ul className="space-y-1 text-xs text-slate-500">
-              <li>
-                <strong className="text-slate-700">Full system backup</strong>: the database plus every uploaded file (SKU
-                photos, layout image). Use it to move or rebuild the whole system.
-              </li>
-              <li>
-                <strong className="text-slate-700">Database backup</strong>: the database only, smaller. Uploaded files are
-                not in it.
-              </li>
-            </ul>
-            <p className="text-xs text-slate-500">
-              Both are compressed <code>.jsonl.gz</code> files and are restored below. They contain user accounts (password
-              hashes) and gateway keys: keep them safe.
-            </p>
-            <NoticeBox notice={backupNotice} />
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => backup(true)} disabled={busy !== null} className={buttonStyles.primary}>
-                {busy === "full" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                Download Full Backup
-              </button>
-              <button type="button" onClick={() => backup(false)} disabled={busy !== null} className={buttonStyles.secondary}>
-                {busy === "backup" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                Database Only
-              </button>
-            </div>
-          </Card>
+          <DatabaseBackupCard />
 
           <Card icon={<Upload size={18} />} title="Restore" sub="Replaces everything with a full system or database backup file.">
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">

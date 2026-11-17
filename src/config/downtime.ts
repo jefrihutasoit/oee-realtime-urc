@@ -26,6 +26,20 @@ export function downtimeTypeColors(types: string[]) {
   };
 }
 
+/**
+ * Planned / unplanned downtime: a row with a notification number (breakdown reported to maintenance) is
+ * unplanned; without one it is planned (cleaning, changeover, setting …). Same rule as the backend summary.
+ */
+export type DowntimeCategory = "UNPLANNED" | "PLANNED";
+
+export const downtimeCategory = (notificationNo: string): DowntimeCategory =>
+  notificationNo.trim() ? "UNPLANNED" : "PLANNED";
+
+export const DOWNTIME_CATEGORIES: Record<DowntimeCategory, { label: string; hint: string; color: string }> = {
+  UNPLANNED: { label: "Unplanned", hint: "with notification no.", color: "#e34948" },
+  PLANNED: { label: "Planned", hint: "without notification no.", color: "#2a78d6" },
+};
+
 /** Seconds → "2h 10m" / "25m". */
 export function minutesLabel(seconds: number) {
   const total = Math.round(seconds / 60);

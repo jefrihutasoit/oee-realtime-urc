@@ -22,6 +22,7 @@ const DEV_ORIGINS = [
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4000").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  output :"standalone",
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,

@@ -31,7 +31,7 @@ import { useProductionUnits } from "@/lib/production-units";
 import { todayYmd } from "@/lib/reject-sheet";
 import { shiftApi } from "@/lib/shift-api";
 import { skuApi } from "@/lib/sku-api";
-import type { MachineRegistration } from "@/types/machine";
+import { MACHINE_CATEGORIES, MACHINE_CATEGORY_LABELS, type MachineCategory, type MachineRegistration } from "@/types/machine";
 import type { Report, ReportType } from "@/types/report";
 import type { Shift } from "@/types/shift";
 import type { SkuMaster } from "@/types/sku";
@@ -42,6 +42,8 @@ const GROUP_NOUN: Record<ReportType, string> = { daily: "dates", shift: "shifts"
 interface Filters {
   from: string;
   to: string;
+  /** Bagger and Machine Packaging are evaluated separately; a report covers one category. */
+  category: MachineCategory;
   machines: string[];
   skus: string[];
   shift: string;
@@ -50,7 +52,7 @@ interface Filters {
 
 const defaultFilters = (): Filters => {
   const today = todayYmd();
-  return { from: `${today.slice(0, 8)}01`, to: today, machines: [], skus: [], shift: "", type: "daily" };
+  return { from: `${today.slice(0, 8)}01`, to: today, category: "BAGGER", machines: [], skus: [], shift: "", type: "daily" };
 };
 
 const inputClass =
@@ -106,7 +108,15 @@ export default function Reports() {
 
   const fetchReport = useCallback((f: Filters) => {
     reportApi
-      .get({ type: f.type, from: f.from, to: f.to, machines: f.machines.join(","), skus: f.skus.join(","), shift: f.shift })
+      .get({
+        type: f.type,
+        from: f.from,
+        to: f.to,
+        category: f.category,
+        machines: f.machines.join(","),
+        skus: f.skus.join(","),
+        shift: f.shift,
+      })
       .then((r) => {
         setReport(r);
         setApplied(f);
@@ -132,8 +142,11 @@ export default function Reports() {
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) => setFilters((f) => ({ ...f, [key]: value }));
 
   const machineOptions = useMemo(
-    () => machines.map((m) => ({ value: m.id, label: m.machineNo, hint: m.machineName })),
-    [machines]
+    () =>
+      machines
+        .filter((m) => m.category === filters.category)
+        .map((m) => ({ value: m.id, label: m.machineNo, hint: m.machineName })),
+    [machines, filters.category]
   );
   const skuOptions = useMemo(
     () => [
@@ -144,7 +157,9 @@ export default function Reports() {
   );
 
   const filterText = (f: Filters): ReportFilterText => ({
-    machines: f.machines.length ? machines.filter((m) => f.machines.includes(m.id)).map((m) => m.machineNo).join(", ") : "All",
+    machines: `${MACHINE_CATEGORY_LABELS[f.category]} – ${
+      f.machines.length ? machines.filter((m) => f.machines.includes(m.id)).map((m) => m.machineNo).join(", ") : "All"
+    }`,
     skus: f.skus.length ? f.skus.join(", ") : "All",
     shift: shifts.find((s) => s.id === f.shift)?.name ?? "All",
   });
@@ -195,6 +210,20 @@ export default function Reports() {
         >
           <Field label="Date Range">
             <DateRangeInput from={filters.from} to={filters.to} onChange={(r) => setFilters((f) => ({ ...f, ...r }))} />
+          </Field>
+          <Field label="Category">
+            <select
+              value={filters.category}
+              // Machines of the other category are no longer in the list.
+              onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value as MachineCategory, machines: [] }))}
+              className={inputClass}
+            >
+              {MACHINE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {MACHINE_CATEGORY_LABELS[c]}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label={name.one}>
             <MultiSelect

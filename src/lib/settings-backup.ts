@@ -45,6 +45,7 @@ const MACHINE_COLUMNS = [
   "Active",
   "OEE Enabled",
   "Photo",
+  "Category",
 ] as const;
 
 const STATUSES: MachineStatus[] = ["RUN", "STOP", "OFF"];
@@ -93,9 +94,10 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
         m.isActive,
         m.oeeEnabled,
         m.photo,
+        m.category ?? "BAGGER",
       ]),
     ],
-    [11, 24, 28, 28, 28, 28, 12, 12, 14, 20, 8, 12, 30]
+    [11, 24, 28, 28, 28, 28, 12, 12, 14, 20, 8, 12, 30, 12]
   );
   add(
     SHEETS.tags,
@@ -350,6 +352,8 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
           : 480,
       isActive: optionalBool("Active", true),
       oeeEnabled: optionalBool("OEE Enabled", true),
+      // Older backups have no category column: Bagger. The backend checks the value.
+      category: ((has("Category") && text(get("Category")).toUpperCase()) || "BAGGER") as BackupMachine["category"],
       photo: text(get("Photo")) || null,
       monitoringTags: [],
     };

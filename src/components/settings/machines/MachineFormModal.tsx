@@ -14,6 +14,7 @@ import type {
   ProductionTagKey,
   ProductionUnitKey,
 } from "@/types/machine";
+import { MACHINE_CATEGORIES, MACHINE_CATEGORY_LABELS } from "@/types/machine";
 import ScaleSettings, { type ScaleForm } from "./ScaleSettings";
 
 interface MachineFormModalProps {
@@ -109,6 +110,7 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
     photo: machine?.photo ?? null,
     isActive: machine?.isActive ?? true,
     oeeEnabled: machine?.oeeEnabled ?? true,
+    category: machine?.category ?? "BAGGER",
   });
   const [rows, setRows] = useState<MonitoringRow[]>(
     () => machine?.monitoringTags.map((t) => ({ key: ++rowSeq, ...t })) ?? []
@@ -276,6 +278,28 @@ export default function MachineFormModal({ machine, tags, onClose, onSubmit }: M
               </div>
 
               <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Category</p>
+                    <p className="text-xs text-slate-500">Bagger and Machine Packaging are evaluated separately.</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1 rounded-lg bg-slate-100 p-1" role="radiogroup" aria-label="Category">
+                    {MACHINE_CATEGORIES.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.category === c}
+                        onClick={() => set("category", c)}
+                        className={`rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap ${
+                          form.category === c ? "bg-surface text-(--brand) shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        {MACHINE_CATEGORY_LABELS[c]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                   <div>
                     <p className="text-sm font-medium text-slate-700">Active</p>

@@ -7,6 +7,8 @@ const query = (params: Record<string, string>) =>
 export interface HistoricalFilter {
   from: string;
   to: string;
+  /** BAGGER or PACKAGING: totals of one machine category. */
+  category: string;
   machines: string;
   skus: string;
   shift: string;

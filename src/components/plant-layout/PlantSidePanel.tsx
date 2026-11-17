@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { MousePointerClick } from "lucide-react";
 import MachineInfoCard, { PIN_STYLES, pinStateOf } from "@/components/dashboard/MachineInfoCard";
 import type { LiveMachine } from "@/hooks/useLiveMachines";
 import { useMachineLabel } from "@/lib/machine-label";
+import { MACHINE_CATEGORIES, MACHINE_CATEGORY_LABELS, type MachineCategory } from "@/types/machine";
 
 const fmt = new Intl.NumberFormat("en-US");
 
@@ -25,8 +27,11 @@ export default function PlantSidePanel({
   selected: LiveMachine | null;
 }) {
   const name = useMachineLabel();
-  const active = machines.filter((m) => m.isActive);
-  const count = (states: string[]) => active.filter((m) => states.includes(pinStateOf(m))).length;
+  // Machine status: both categories together. OEE, output, reject and downtime: the chosen category.
+  const [category, setCategory] = useState<MachineCategory>("BAGGER");
+  const allActive = machines.filter((m) => m.isActive && m.oeeEnabled);
+  const active = allActive.filter((m) => m.category === category);
+  const count = (states: string[]) => allActive.filter((m) => states.includes(pinStateOf(m))).length;
   const counts = [
     { key: "RUN", label: "Run", value: count(["RUN"]), color: PIN_STYLES.RUN.color },
     { key: "STOP", label: "Stop", value: count(["STOP"]), color: PIN_STYLES.STOP.color },
@@ -34,8 +39,8 @@ export default function PlantSidePanel({
   ];
   const noData = count(["NO_DATA"]);
 
-  // Current OEE runs (since shift start, SKU change or a finish rule); machines with OEE disabled are left out.
-  const live = active.filter((m) => m.oeeEnabled && m.live);
+  // Current OEE runs (since shift start, SKU change or a finish rule).
+  const live = active.filter((m) => m.live);
   const downtime = live.reduce((s, m) => s + m.live!.stopSeconds, 0);
   const stops = live.reduce((s, m) => s + m.live!.stopCount, 0);
   const output = live.reduce((s, m) => s + m.live!.output, 0);
@@ -49,7 +54,7 @@ export default function PlantSidePanel({
       <section className="rounded-xl border border-slate-200 bg-surface p-4">
         <p className="text-sm font-medium tracking-wide text-slate-500 uppercase">Plant now</p>
         <p className="text-xs text-slate-500">
-          {active.length} active {name.many.toLowerCase()}
+          {allActive.length} active machines · all categories
           {noData > 0 && ` · ${noData} without data`}
         </p>
 
@@ -64,7 +69,27 @@ export default function PlantSidePanel({
           ))}
         </div>
 
-        <dl className="mt-4 space-y-3">
+        <div className="mt-4 flex gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Machine category">
+          {MACHINE_CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={category === c}
+              onClick={() => setCategory(c)}
+              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
+                category === c ? "bg-surface text-(--brand) shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {MACHINE_CATEGORY_LABELS[c]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          {active.length} active {MACHINE_CATEGORY_LABELS[category].toLowerCase()}
+        </p>
+
+        <dl className="mt-3 space-y-3">
           <div>
             <dt className="text-xs font-medium text-slate-500">Total output</dt>
             <dd className="text-2xl font-bold text-slate-900 tabular-nums">
@@ -77,14 +102,14 @@ export default function PlantSidePanel({
             <dt className="text-xs font-medium text-slate-500">Total downtime</dt>
             <dd className="text-2xl font-bold text-amber-600 tabular-nums">{hm(downtime)}</dd>
             <dd className="text-xs text-slate-500 tabular-nums">
-              {stops}× Stop / Breakdown · all {name.many.toLowerCase()}
+              {stops}× Stop / Breakdown · all {MACHINE_CATEGORY_LABELS[category].toLowerCase()}
             </dd>
           </div>
           <div>
             <dt className="text-xs font-medium text-slate-500">Average OEE</dt>
             <dd className="text-2xl font-bold text-slate-900 tabular-nums">{avgOee === null ? "—" : `${avgOee.toFixed(1)}%`}</dd>
             <dd className="text-xs text-slate-500">
-              {counted.length} {(counted.length === 1 ? name.one : name.many).toLowerCase()} counting
+              {counted.length} {counted.length === 1 ? "machine" : "machines"} counting
             </dd>
           </div>
         </dl>

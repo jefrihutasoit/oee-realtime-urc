@@ -1,4 +1,5 @@
 // Keep in sync with be-realtime-urc/src/types/summary.ts
+import type { MachineCategory } from "./machine";
 /** OEE figures in percent; null when nothing was counted. */
 export interface OeeFigures {
   oee: number | null;
@@ -23,7 +24,12 @@ export interface DailySummary {
   /** End of the last production day. */
   dayEnd: string;
   generatedAt: string;
+  /** The machine category summarised (Bagger and Machine Packaging are evaluated separately). */
+  category: MachineCategory;
+  /** Active machines of the category with OEE enabled (the ones the summary counts). */
   activeMachines: number;
+  /** Active machines of both categories with OEE enabled: the machine status is shown for them together. */
+  statusMachines: number;
   /** Average of the machines' OEE over the range, over machines that counted time. */
   oee: OeeFigures & { machines: number };
   output: number;
@@ -49,5 +55,9 @@ export interface DailySummary {
   downtime: {
     totalSeconds: number;
     byType: { type: string; seconds: number; count: number }[];
+    /** Rows without a notification number. */
+    planned: { seconds: number; count: number };
+    /** Rows with a notification number. */
+    unplanned: { seconds: number; count: number };
   };
 }

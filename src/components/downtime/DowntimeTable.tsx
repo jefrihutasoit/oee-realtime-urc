@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
-import { downtimeTypeColors, downtimeTypeLabel, minutesLabel } from "@/config/downtime";
+import {
+  DOWNTIME_CATEGORIES,
+  downtimeCategory,
+  downtimeTypeColors,
+  downtimeTypeLabel,
+  minutesLabel,
+} from "@/config/downtime";
 import { useCan } from "@/lib/auth";
 import { downtimeApi } from "@/lib/downtime-api";
 import type { DowntimeRecord } from "@/types/downtime";
@@ -38,6 +44,8 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
 
   const colorOf = useMemo(() => downtimeTypeColors(records?.map((r) => r.downtimeType) ?? []), [records]);
   const total = records?.reduce((s, r) => s + (r.durationSeconds ?? 0), 0) ?? 0;
+  const unplanned =
+    records?.reduce((s, r) => s + (downtimeCategory(r.notificationNo) === "UNPLANNED" ? (r.durationSeconds ?? 0) : 0), 0) ?? 0;
 
   async function remove(r: DowntimeRecord) {
     setDeleting(r.id);
@@ -57,7 +65,9 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
         <div>
           <h3 className="font-semibold text-slate-900">Downtime Data</h3>
           <p className="text-xs text-slate-500">
-            {records ? `${records.length} rows · ${minutesLabel(total)} total` : "Uploaded downtime"}
+            {records
+              ? `${records.length} rows · ${minutesLabel(total)} total · Unplanned ${minutesLabel(unplanned)} · Planned ${minutesLabel(total - unplanned)}`
+              : "Uploaded downtime"}
           </p>
         </div>
         <label className="text-xs text-slate-500">
@@ -83,6 +93,7 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
               <th className="px-4 py-2 font-medium">SKU</th>
               <th className="px-4 py-2 font-medium">Detail</th>
               <th className="px-4 py-2 font-medium">Notification</th>
+              <th className="px-4 py-2 font-medium">Category</th>
               <th className="px-4 py-2 font-medium">Operator</th>
               <th className="px-4 py-2 font-medium">Type</th>
               <th className="px-4 py-2" />
@@ -91,13 +102,13 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
           <tbody className="divide-y divide-slate-100">
             {!records ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-400">
                   <Loader2 size={18} className="mx-auto animate-spin" />
                 </td>
               </tr>
             ) : records.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-400">
                   No downtime uploaded for this date.
                 </td>
               </tr>
@@ -116,6 +127,17 @@ export default function DowntimeTable({ date, onDateChange, reloadToken }: Downt
                   <td className="px-4 py-2 whitespace-nowrap text-slate-700">{r.sku}</td>
                   <td className="max-w-sm px-4 py-2 text-slate-700">{r.detail}</td>
                   <td className="px-4 py-2 text-slate-700 tabular-nums">{r.notificationNo}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    {(() => {
+                      const c = DOWNTIME_CATEGORIES[downtimeCategory(r.notificationNo)];
+                      return (
+                        <span className="inline-flex items-center gap-1.5 text-slate-700">
+                          <span className="size-2 rounded-full" style={{ background: c.color }} />
+                          {c.label}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-2 text-slate-700">{r.operator}</td>
                   <td className="px-4 py-2 whitespace-nowrap">
                     {r.downtimeType ? (

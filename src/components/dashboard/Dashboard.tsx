@@ -7,7 +7,8 @@ import { useCurrentShift } from "@/hooks/useCurrentShift";
 import { dashboardStatus, useLiveMachines } from "@/hooks/useLiveMachines";
 import { useMachineLabel } from "@/lib/machine-label";
 import type { MachineStatus } from "@/types/oee";
-import SummaryCards from "./SummaryCards";
+import { MACHINE_CATEGORIES, MACHINE_CATEGORY_LABELS } from "@/types/machine";
+import SummaryCards, { StatusCounts } from "./SummaryCards";
 import MachineCard, { OeeBar, oeeLabel, StatusPill } from "./MachineCard";
 import SkuImage from "./SkuImage";
 import { SpeedBadge } from "./SpeedIndicator";
@@ -98,9 +99,19 @@ export default function Dashboard() {
     return true;
   });
 
+  // Bagger and Machine Packaging are evaluated separately: each category gets its own box with its own
+  // totals (all its machines) and its machines (after the filters).
+  const sections = MACHINE_CATEGORIES.map((category) => ({
+    key: category,
+    title: MACHINE_CATEGORY_LABELS[category],
+    all: machines.filter((m) => m.category === category),
+    items: filtered.filter((m) => m.category === category),
+  })).filter((s) => s.all.length > 0);
+
   return (
     <div className="space-y-4">
-      <SummaryCards machines={machines} />
+      {/* Machine status for both categories together; OEE, output and reject per category below. */}
+      <StatusCounts machines={machines} />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full lg:w-72">
@@ -154,7 +165,7 @@ export default function Dashboard() {
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">{name.many} ({filtered.length})</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Machines ({filtered.length})</h2>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
               connected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
@@ -201,104 +212,118 @@ export default function Dashboard() {
             Register a machine
           </Link>
         </div>
-      ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-surface p-8 text-center text-sm text-slate-500">
-          No machines match the current filters.
-        </p>
-      ) : view === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
-          {filtered.map((m) => (
-            <MachineCard key={m.id} machine={m} />
-          ))}
-        </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs text-slate-500">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">{name.one}</th>
-                <th className="px-4 py-2.5 font-medium">Line</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium" title="Speed / SKU spec per minute">Speed</th>
-                <th className="px-4 py-2.5 font-medium">SKU</th>
-                <th className="w-40 px-4 py-2.5 font-medium">OEE</th>
-                <th className="px-4 py-2.5 text-right font-medium">A / P / Q</th>
-                <th className="px-4 py-2.5 text-right font-medium">Output</th>
-                <th className="px-4 py-2.5 text-right font-medium">Reject</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 tabular-nums">
-              {filtered.map((m) => (
-                <tr
-                  key={m.id}
-                  aria-disabled={!m.isActive || undefined}
-                  className={m.isActive ? "hover:bg-slate-50" : "bg-slate-50 opacity-50 grayscale"}
-                >
-                  <td className="px-4 py-2.5">
-                    {m.isActive ? (
-                      <Link
-                        href={`/dashboard/machine/${encodeURIComponent(m.id)}`}
-                        className="font-semibold text-slate-900 hover:text-(--brand) hover:underline"
-                      >
-                        {m.machineNo}
-                      </Link>
-                    ) : (
-                      <span className="font-semibold text-slate-500">{m.machineNo}</span>
-                    )}
-                    <span className="block text-xs text-slate-500">{m.machineName}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600">{m.line}</td>
-                  <td className="px-4 py-2.5">
-                    <StatusPill status={dashboardStatus(m.status)} inactive={!m.isActive} />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {m.isActive && m.speed ? (
-                      <SpeedBadge speed={m.speed} outputUnit={m.outputUnit} />
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {m.live ? (
-                      <span className="flex items-center gap-2">
-                        <SkuImage sku={m.live.sku} className="h-6 w-6" />
-                        <span className="text-slate-700">{m.live.sku.name}</span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {m.isActive ? (
-                      <span
-                        className="flex items-center gap-2"
-                        title={m.oeeEnabled ? undefined : "OEE disabled: excluded from summary"}
-                      >
-                        <span className="w-14 shrink-0 font-medium text-slate-900">{oeeLabel(m)}</span>
-                        <OeeBar value={m.live?.oee ?? 0} />
-                        {!m.oeeEnabled && <span className="shrink-0 text-[11px] text-slate-400">Excl.</span>}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">Disabled</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-slate-600">
-                    {m.live
-                      ? `${m.live.availability.toFixed(1)} / ${m.live.performance.toFixed(1)} / ${m.live.quality.toFixed(1)}`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-slate-700">
-                    {m.live ? <Qty value={m.live.output} unit={m.outputUnit} /> : "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-red-600">
-                    {m.live ? <Qty value={m.live.reject} unit={m.rejectUnit} /> : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        sections.map((section) => (
+          <section key={section.key} className="rounded-xl border border-slate-200 bg-surface">
+            <h3 className="border-b border-slate-100 px-4 py-3 font-semibold text-slate-900">
+              {section.title} <span className="font-normal text-slate-500">({section.items.length})</span>
+            </h3>
+            <div className="border-b border-slate-100 bg-slate-50 p-4">
+              <SummaryCards machines={section.all} label={section.title} />
+            </div>
+            {section.items.length === 0 ? (
+              <p className="p-6 text-center text-sm text-slate-500">No machines match the current filters.</p>
+            ) : view === "grid" ? (
+              <div className="grid grid-cols-1 gap-3 p-4 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                {section.items.map((m) => (
+                  <MachineCard key={m.id} machine={m} />
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">{table(section.items)}</div>
+            )}
+          </section>
+        ))
       )}
     </div>
   );
+
+  function table(list: typeof filtered) {
+    return (
+      <table className="w-full min-w-[860px] text-sm">
+        <thead className="bg-slate-50 text-left text-xs text-slate-500">
+          <tr>
+            <th className="px-4 py-2.5 font-medium">{name.one}</th>
+            <th className="px-4 py-2.5 font-medium">Line</th>
+            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium" title="Speed / SKU spec per minute">Speed</th>
+            <th className="px-4 py-2.5 font-medium">SKU</th>
+            <th className="w-40 px-4 py-2.5 font-medium">OEE</th>
+            <th className="px-4 py-2.5 text-right font-medium">A / P / Q</th>
+            <th className="px-4 py-2.5 text-right font-medium">Output</th>
+            <th className="px-4 py-2.5 text-right font-medium">Reject</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 tabular-nums">
+          {list.map((m) => (
+            <tr
+              key={m.id}
+              aria-disabled={!m.isActive || undefined}
+              className={m.isActive ? "hover:bg-slate-50" : "bg-slate-50 opacity-50 grayscale"}
+            >
+              <td className="px-4 py-2.5">
+                {m.isActive ? (
+                  <Link
+                    href={`/dashboard/machine/${encodeURIComponent(m.id)}`}
+                    className="font-semibold text-slate-900 hover:text-(--brand) hover:underline"
+                  >
+                    {m.machineNo}
+                  </Link>
+                ) : (
+                  <span className="font-semibold text-slate-500">{m.machineNo}</span>
+                )}
+                <span className="block text-xs text-slate-500">{m.machineName}</span>
+              </td>
+              <td className="px-4 py-2.5 text-slate-600">{m.line}</td>
+              <td className="px-4 py-2.5">
+                <StatusPill status={dashboardStatus(m.status)} inactive={!m.isActive} />
+              </td>
+              <td className="px-4 py-2.5">
+                {m.isActive && m.speed ? (
+                  <SpeedBadge speed={m.speed} outputUnit={m.outputUnit} />
+                ) : (
+                  <span className="text-slate-400">—</span>
+                )}
+              </td>
+              <td className="px-4 py-2.5">
+                {m.live ? (
+                  <span className="flex items-center gap-2">
+                    <SkuImage sku={m.live.sku} className="h-6 w-6" />
+                    <span className="text-slate-700">{m.live.sku.name}</span>
+                  </span>
+                ) : (
+                  <span className="text-slate-400">—</span>
+                )}
+              </td>
+              <td className="px-4 py-2.5">
+                {m.isActive ? (
+                  <span
+                    className="flex items-center gap-2"
+                    title={m.oeeEnabled ? undefined : "OEE disabled: excluded from summary"}
+                  >
+                    <span className="w-14 shrink-0 font-medium text-slate-900">{oeeLabel(m)}</span>
+                    <OeeBar value={m.live?.oee ?? 0} />
+                    {!m.oeeEnabled && <span className="shrink-0 text-[11px] text-slate-400">Excl.</span>}
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-400">Disabled</span>
+                )}
+              </td>
+              <td className="px-4 py-2.5 text-right text-slate-600">
+                {m.live
+                  ? `${m.live.availability.toFixed(1)} / ${m.live.performance.toFixed(1)} / ${m.live.quality.toFixed(1)}`
+                  : "—"}
+              </td>
+              <td className="px-4 py-2.5 text-right text-slate-700">
+                {m.live ? <Qty value={m.live.output} unit={m.outputUnit} /> : "—"}
+              </td>
+              <td className="px-4 py-2.5 text-right text-red-600">
+                {m.live ? <Qty value={m.live.reject} unit={m.rejectUnit} /> : "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
 }
