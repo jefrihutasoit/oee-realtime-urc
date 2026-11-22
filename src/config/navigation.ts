@@ -54,6 +54,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "OEE", href: "/historical" },
       { label: "Trend", href: "/historical/trend" },
+      { label: "Scale Monitoring", href: "/historical/scale" },
     ],
   },
   { label: "SKU Management", icon: Boxes, href: "/sku" },

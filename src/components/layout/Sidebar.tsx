@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { canOpen } from "@/config/access";
 import { navigation, type NavItem } from "@/config/navigation";
 import { useAuth } from "@/lib/auth";
+import SystemResources from "./SystemResources";
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -104,15 +105,38 @@ function ActiveNavItems({ collapsed }: { collapsed: boolean }) {
   return <NavItems pathname={usePathname()} collapsed={collapsed} />;
 }
 
-export default function Sidebar({ collapsed, mobileOpen, onClose }: SidebarProps) {
+/** Delay before a hovered collapsed menu opens, so passing over it with the mouse does not open it. */
+const PEEK_DELAY_MS = 150;
+
+export default function Sidebar({ collapsed: folded, mobileOpen, onClose }: SidebarProps) {
+  // A collapsed menu opens while the mouse is over it, floating above the page so the page does not move.
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const peeking = folded && peek;
+  const collapsed = folded && !peek && !mobileOpen;
+
+  const startPeek = () => {
+    if (!folded) return;
+    clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(true), PEEK_DELAY_MS);
+  };
+  const endPeek = () => {
+    clearTimeout(peekTimer.current);
+    setPeek(false);
+  };
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
+
   return (
-    <>
+    // On desktop this box keeps the collapsed width in the layout while the menu floats over the page.
+    <div className={`contents md:relative md:block md:shrink-0 ${folded ? "md:w-[72px]" : "md:w-60"}`}>
       {mobileOpen && <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onClose} />}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 theme-fixed flex w-60 flex-col bg-[#0E1B2C] transition-[transform,width] motion-reduce:transition-none md:static md:translate-x-0 ${
-          collapsed ? "md:w-[72px]" : ""
-        } ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        onMouseEnter={startPeek}
+        onMouseLeave={endPeek}
+        className={`fixed inset-y-0 left-0 z-50 theme-fixed flex w-60 flex-col bg-[#0E1B2C] transition-[transform,width] motion-reduce:transition-none md:absolute md:translate-x-0 ${
+          collapsed ? "md:w-[72px]" : "md:w-60"
+        } ${peeking ? "md:shadow-2xl" : ""} ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="relative flex h-20 shrink-0 items-center justify-center border-b border-white/10 px-4">
           {collapsed ? (
@@ -150,7 +174,8 @@ export default function Sidebar({ collapsed, mobileOpen, onClose }: SidebarProps
             <ActiveNavItems collapsed={collapsed} />
           </Suspense>
         </nav>
+        <SystemResources collapsed={collapsed} />
       </aside>
-    </>
+    </div>
   );
 }

@@ -110,12 +110,25 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
   add(
     SHEETS.skus,
     [
-      ["SKU ID", "Product Name", "SKU", "Output Per Minute"],
-      ...backup.skus.map((s) => [s.skuId, s.productName, s.sku, s.outputPerMinute]),
+      ["SKU ID", "Product Name", "SKU", "Output Per Minute", "Weight"],
+      ...backup.skus.map((s) => [s.skuId, s.productName, s.sku, s.outputPerMinute, s.targetWeight ?? null]),
     ],
-    [12, 32, 14, 18]
+    [12, 32, 14, 18, 10]
   );
-  add(SHEETS.shifts, [["Name", "Start", "End"], ...backup.shifts.map((s) => [s.name, s.start, s.end])], [16, 8, 8]);
+  add(
+    SHEETS.shifts,
+    [
+      ["Name", "Start", "End", "Days", "Day Times"],
+      ...backup.shifts.map((s) => [
+        s.name,
+        s.start,
+        s.end,
+        (s.days ?? ALL_DAYS).map((d) => DAY_CODES[d]).join(","),
+        (s.dayTimes ?? []).map((t) => `${DAY_CODES[t.day]} ${t.start}-${t.end}`).join("; "),
+      ]),
+    ],
+    [16, 8, 8, 30, 34]
+  );
   const def = backup.statusDefinition;
   add(
     SHEETS.status,
@@ -135,6 +148,7 @@ export async function backupToWorkbook(backup: SettingsBackup): Promise<WorkBook
       ["Setting", "Value"],
       ["Start Mode", oee.startMode],
       ["Counter Mode", oee.counterMode],
+      ["Counting Mode", oee.countingMode],
       ["Reset On SKU Change", oee.resetOnSkuChange],
       ["Pause When Off", oee.pauseWhenOff],
       ["Reject Source", oee.rejectSource],
@@ -369,18 +383,28 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
   }
 
   const skus = readRows(XLSX, wb, SHEETS.skus, ["SKU ID", "Product Name", "SKU", "Output Per Minute"], errors).map(
-    ({ rowNumber, get }) => ({
-      skuId: text(get("SKU ID")),
-      productName: text(get("Product Name")),
-      sku: text(get("SKU")),
-      outputPerMinute: num(get("Output Per Minute"), `${SHEETS.skus} row ${rowNumber}: Output Per Minute`, errors),
-    })
+    ({ rowNumber, get, has }) => {
+      // Weight: older backups have no column; an empty cell means not set.
+      const weight = (col: string) =>
+        has(col) && text(get(col)) !== "" ? num(get(col), `${SHEETS.skus} row ${rowNumber}: ${col}`, errors) : null;
+      return {
+        skuId: text(get("SKU ID")),
+        productName: text(get("Product Name")),
+        sku: text(get("SKU")),
+        outputPerMinute: num(get("Output Per Minute"), `${SHEETS.skus} row ${rowNumber}: Output Per Minute`, errors),
+        targetWeight: weight("Weight"),
+      };
+    }
   );
 
-  const shifts = readRows(XLSX, wb, SHEETS.shifts, ["Name", "Start", "End"], errors).map(({ get }) => ({
+  const shifts = readRows(XLSX, wb, SHEETS.shifts, ["Name", "Start", "End"], errors).map(({ get, has }) => ({
     name: text(get("Name")),
     start: time(get("Start")),
     end: time(get("End")),
+    // "Mon,Tue,Sat" or "1,2,6"; older backups and an empty cell: every day.
+    days: has("Days") && text(get("Days")) ? parseDayList(text(get("Days"))) : undefined,
+    // "Sat 06:00-11:00; Sun 07:00-12:00"; older backups: none.
+    dayTimes: has("Day Times") ? parseDayTimeList(text(get("Day Times"))) : undefined,
   }));
 
   const statusDefinition: SettingsBackup["statusDefinition"] = { run: [], stop: [], off: [], unmatched: "OFF" };
@@ -418,6 +442,9 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
         break;
       case "countermode":
         oeeSettings.counterMode = text(value).toLowerCase() as Oee["counterMode"];
+        break;
+      case "countingmode":
+        oeeSettings.countingMode = text(value).toLowerCase() as Oee["countingMode"];
         break;
       case "resetonskuchange":
         oeeSettings.resetOnSkuChange = bool(value, `${where}: Value`, errors);
@@ -581,4 +608,30 @@ export async function parseBackupFile(file: File): Promise<ParsedBackup> {
     },
     errors,
   };
+}
+
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+const DAY_CODES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** "Mon,Tue,Sat" or "1,2,6" -> weekday numbers; unknown parts are left for the backend to reject. */
+function parseDayList(value: string): number[] {
+  return value
+    .split(/[,;\s]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const i = DAY_CODES.findIndex((c) => c.toLowerCase() === part.slice(0, 3).toLowerCase());
+      return i >= 0 ? i : Number(part);
+    });
+}
+
+/** "Sat 06:00-11:00; Sun 07:00-12:00" -> other times per day; unreadable parts are left for the backend to reject. */
+function parseDayTimeList(value: string) {
+  return value
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [code = "", range = ""] = part.split(/\s+/, 2);
+      const [start = "", end = ""] = range.split("-").map((s) => s.trim());
+      return { day: parseDayList(code)[0], start, end };
+    });
 }

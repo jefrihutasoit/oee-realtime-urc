@@ -94,18 +94,33 @@ function LicenseScreen({ data }: { data: LicenseStatus }) {
   );
 }
 
+/** Machine monitoring pages: the menu folds away on its own there, to give the machines the room. */
+const isMonitoringPath = (path: string) => path === "/dashboard/machine" || path.startsWith("/dashboard/machine/");
+
 function Shell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const monitoring = isMonitoringPath(pathname);
+  // The menu state elsewhere is kept; on the machine pages it starts collapsed each time they are opened
+  // and can still be expanded with the menu button.
   const [collapsed, setCollapsed] = useState(false);
+  const [monitorCollapsed, setMonitorCollapsed] = useState(true);
+  const [wasMonitoring, setWasMonitoring] = useState(monitoring);
+  if (wasMonitoring !== monitoring) {
+    setWasMonitoring(monitoring);
+    if (monitoring) setMonitorCollapsed(true);
+  }
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuCollapsed = monitoring ? monitorCollapsed : collapsed;
 
   function toggleMenu() {
-    if (window.matchMedia("(min-width: 768px)").matches) setCollapsed((v) => !v);
-    else setMobileOpen(true);
+    if (!window.matchMedia("(min-width: 768px)").matches) setMobileOpen(true);
+    else if (monitoring) setMonitorCollapsed((v) => !v);
+    else setCollapsed((v) => !v);
   }
 
   return (
     <div className="flex h-screen">
-      <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <Sidebar collapsed={menuCollapsed} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <DatabaseBanner />
         <Header onMenuClick={toggleMenu} />

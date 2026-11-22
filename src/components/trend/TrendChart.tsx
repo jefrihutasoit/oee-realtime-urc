@@ -17,7 +17,16 @@ export interface ChartSeries {
   axis: number;
   /** Dash pattern, for series that reuse a color. */
   dash?: string;
+  /** Unique id when several machines draw the same signal; defaults to the signal key. */
+  id?: string;
 }
+
+/** Identity of a series inside one chart. */
+const sid = (s: ChartSeries) => s.id ?? s.signal.key;
+
+/** Weight specification over a stretch of time, drawn on the first axis (Scale Monitoring). */
+export type { SpecBand } from "@/types/scale";
+import type { SpecBand } from "@/types/scale";
 
 export interface ChartAxis {
   /** Shown above the axis, e.g. the unit. */
@@ -135,6 +144,7 @@ export default function TrendChart({
   to,
   bucketMs,
   status,
+  statusRows,
   height,
   hoverT,
   onHover,
@@ -142,6 +152,7 @@ export default function TrendChart({
   tooltip,
   label,
   normalized = false,
+  specBands = [],
 }: {
   series: ChartSeries[];
   axes: ChartAxis[];
@@ -149,6 +160,8 @@ export default function TrendChart({
   to: number;
   bucketMs: number;
   status: TimelineSegment[];
+  /** Several status bands under the plot, one per machine (compared machines); replaces `status`. */
+  statusRows?: { label: string; segments: TimelineSegment[] }[];
   height: number;
   hoverT: number | null;
   onHover: (t: number | null) => void;
@@ -159,6 +172,8 @@ export default function TrendChart({
   label: string;
   /** Scale every series to its own lowest–highest value on one 0–100% axis; `axes` is not used. */
   normalized?: boolean;
+  /** Target and limits on the first axis; readings outside the limits are marked. */
+  specBands?: SpecBand[];
 }) {
   const [ref, width] = useWidth();
   const uid = useId().replace(/:/g, "");
@@ -171,7 +186,10 @@ export default function TrendChart({
   const left = Math.max(1, leftAxes.length) * AXIS_W;
   const right = rightAxes.length ? rightAxes.length * AXIS_W : 14;
   const plotW = Math.max(width - left - right, 10);
-  const plotH = height - TOP - BOTTOM;
+  const rows = statusRows ?? (status.length ? [{ label: "", segments: status }] : []);
+  /** Extra room under the plot for status bands past the first. */
+  const extraRows = Math.max(rows.length - 1, 0) * (STATUS_H + 2);
+  const plotH = height - TOP - BOTTOM - extraRows;
   const span = Math.max(to - from, 1);
   const x = (t: number) => left + ((Math.min(Math.max(t, from), to) - from) / span) * plotW;
   const tAt = (px: number) => from + ((Math.min(Math.max(px, left), left + plotW) - left) / plotW) * span;
@@ -196,7 +214,16 @@ export default function TrendChart({
   const scales = normalized
     ? [{ min: 0, max: 100, ticks: [0, 25, 50, 75, 100] }]
     : axes.map((_, a) => {
-        const e = extent(series.filter((s) => s.axis === a));
+        let e = extent(series.filter((s) => s.axis === a));
+        // The first axis also covers the spec limits, so they stay in view.
+        if (a === 0) {
+          for (const b of specBands) {
+            for (const v of [b.low, b.target, b.high]) {
+              if (v === null) continue;
+              e = e ? { lo: Math.min(e.lo, v), hi: Math.max(e.hi, v) } : { lo: v, hi: v };
+            }
+          }
+        }
         return e ? niceScale(e.lo, e.hi) : niceScale(0, 1);
       });
   const y = (a: number, v: number) => {
@@ -204,10 +231,10 @@ export default function TrendChart({
     return TOP + plotH - ((v - sc.min) / (sc.max - sc.min || 1)) * plotH;
   };
   /** Normalized: a series' lowest value sits at 0%, its highest at 100%; a flat one at 50%. */
-  const ranges = new Map(series.map((s) => [s.signal.key, normalized ? extent([s]) : null]));
+  const ranges = new Map(series.map((s) => [sid(s), normalized ? extent([s]) : null]));
   const ys = (s: ChartSeries, v: number) => {
     if (!normalized) return y(s.axis, v);
-    const e = ranges.get(s.signal.key);
+    const e = ranges.get(sid(s));
     return y(0, !e || e.hi === e.lo ? 50 : ((v - e.lo) / (e.hi - e.lo)) * 100);
   };
 
@@ -285,12 +312,33 @@ export default function TrendChart({
           })}
 
           <g clipPath={`url(#clip-${uid})`}>
+            {/* Weight spec: the in-spec area, the limits (red, dashed) and the target (green) */}
+            {!normalized &&
+              specBands.map((b) => {
+                const x0 = x(b.from);
+                const w = Math.max(x(b.to) - x0, 1);
+                return (
+                  <g key={`spec-${b.from}`}>
+                    {b.low !== null && b.high !== null && (
+                      <rect x={x0} width={w} y={y(0, b.high)} height={Math.max(y(0, b.low) - y(0, b.high), 1)} fill="#22A447" opacity={0.08} />
+                    )}
+                    {[b.low, b.high].map((v, i) =>
+                      v === null ? null : (
+                        <line key={i} x1={x0} x2={x0 + w} y1={y(0, v)} y2={y(0, v)} stroke="#E5484D" strokeWidth={1.5} strokeDasharray="5 3" />
+                      )
+                    )}
+                    {b.target !== null && (
+                      <line x1={x0} x2={x0 + w} y1={y(0, b.target)} y2={y(0, b.target)} stroke="#22A447" strokeWidth={1.5} strokeDasharray="2 2" />
+                    )}
+                  </g>
+                );
+              })}
             {series.map((s) =>
               s.signal.points
                 .filter((p) => p[2] !== p[3])
                 .map((p) => (
                   <rect
-                    key={`${s.signal.key}-${p[0]}`}
+                    key={`${sid(s)}-${p[0]}`}
                     x={x(p[0])}
                     width={Math.max(x(p[0] + bucketMs) - x(p[0]), 1)}
                     y={ys(s, p[3])}
@@ -302,7 +350,7 @@ export default function TrendChart({
             )}
             {series.map((s) => (
               <path
-                key={s.signal.key}
+                key={sid(s)}
                 d={path(s)}
                 fill="none"
                 stroke={s.color}
@@ -314,19 +362,49 @@ export default function TrendChart({
             ))}
           </g>
 
-          {/* Status band */}
-          {status.map((seg) => (
-            <rect
-              key={seg.start}
-              x={x(Date.parse(seg.start))}
-              width={Math.max(x(Date.parse(seg.end)) - x(Date.parse(seg.start)), 0.5)}
-              y={statusY}
-              height={STATUS_H}
-              style={{ fill: seg.status === "NO_DATA" ? `url(#nodata-${uid})` : STATUS_FILL[seg.status] }}
-            >
-              <title>{statusLabel(seg.status)}</title>
-            </rect>
-          ))}
+          {/* Readings outside the spec limits of their time */}
+          {!normalized &&
+            specBands.length > 0 &&
+            series
+              .filter((s) => s.axis === 0)
+              .flatMap((s) =>
+                s.signal.points.flatMap((p) => {
+                  const b = specBands.find((band) => band.from <= p[0] && p[0] < band.to);
+                  if (!b) return [];
+                  const out: { v: number; key: string }[] = [];
+                  if (b.low !== null && p[2] < b.low) out.push({ v: p[2], key: "lo" });
+                  if (b.high !== null && p[3] > b.high) out.push({ v: p[3], key: "hi" });
+                  return out.map((o) => (
+                    <circle key={`${sid(s)}-${p[0]}-${o.key}`} cx={x(p[0])} cy={ys(s, o.v)} r={3} fill="#E5484D" />
+                  ));
+                })
+              )}
+
+          {/* Status bands: one, or one per machine with its name on the left */}
+          {rows.map((row, r) => {
+            const rowY = statusY + r * (STATUS_H + 2);
+            return (
+              <g key={`${row.label}-${r}`}>
+                {row.label && (
+                  <text x={left - 4} y={rowY + STATUS_H - 1} textAnchor="end" className="fill-slate-500 text-[9px]">
+                    {row.label}
+                  </text>
+                )}
+                {row.segments.map((seg) => (
+                  <rect
+                    key={seg.start}
+                    x={x(Date.parse(seg.start))}
+                    width={Math.max(x(Date.parse(seg.end)) - x(Date.parse(seg.start)), 0.5)}
+                    y={rowY}
+                    height={STATUS_H}
+                    style={{ fill: seg.status === "NO_DATA" ? `url(#nodata-${uid})` : STATUS_FILL[seg.status] }}
+                  >
+                    <title>{`${row.label ? `${row.label}: ` : ""}${statusLabel(seg.status)}`}</title>
+                  </rect>
+                ))}
+              </g>
+            );
+          })}
 
           {ticks.map((t) => (
             <g key={t}>
@@ -340,12 +418,12 @@ export default function TrendChart({
 
           {hoverX !== null && (
             <>
-              <line x1={hoverX} x2={hoverX} y1={TOP} y2={statusY + STATUS_H} style={{ stroke: "var(--color-slate-400)" }} strokeDasharray="3 3" />
+              <line x1={hoverX} x2={hoverX} y1={TOP} y2={statusY + STATUS_H + extraRows} style={{ stroke: "var(--color-slate-400)" }} strokeDasharray="3 3" />
               {series.map((s) => {
                 const v = valueAt(s.signal, hoverT!, bucketMs).value;
                 return v === null ? null : (
                   <circle
-                    key={s.signal.key}
+                    key={sid(s)}
                     cx={hoverX}
                     cy={ys(s, v)}
                     r={4}
@@ -372,7 +450,7 @@ export default function TrendChart({
             x={left}
             y={TOP}
             width={plotW}
-            height={plotH + 5 + STATUS_H}
+            height={plotH + 5 + STATUS_H + extraRows}
             fill="transparent"
             className="cursor-crosshair"
             onPointerEnter={() => setInside(true)}

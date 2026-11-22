@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { machineApi } from "@/lib/machine-api";
+import { machineApi, type ShiftSkus } from "@/lib/machine-api";
 import { skuApi } from "@/lib/sku-api";
 import { getSocket } from "@/lib/socket";
 import type { MachineRegistration } from "@/types/machine";
@@ -9,6 +9,8 @@ import type { MachineHistory, MachineMonitoring, MachineOee, MachineTimeline } f
 import type { SkuMaster } from "@/types/sku";
 
 const HISTORY_REFRESH_MS = 5000;
+/** The SKUs of the running shift change slowly; their figures come from the saved hourly data. */
+const SHIFT_SKUS_REFRESH_MS = 15_000;
 
 /**
  * Everything the machine detail page shows. OEE and monitoring values arrive over the socket;
@@ -22,6 +24,7 @@ export function useMachineDetail(id: string) {
   const [history, setHistory] = useState<MachineHistory | null>(null);
   const [timeline, setTimeline] = useState<MachineTimeline | null>(null);
   const [skus, setSkus] = useState<SkuMaster[]>([]);
+  const [shiftSkus, setShiftSkus] = useState<ShiftSkus | null>(null);
   const [connected, setConnected] = useState(false);
 
   const loadMachine = useCallback(() => {
@@ -44,6 +47,19 @@ export function useMachineDetail(id: string) {
       .then(setTimeline)
       .catch(() => {});
   }, [id]);
+
+  const refreshShiftSkus = useCallback(() => {
+    machineApi
+      .shiftSkus(id)
+      .then(setShiftSkus)
+      .catch(() => {});
+  }, [id]);
+
+  useEffect(() => {
+    refreshShiftSkus();
+    const timer = setInterval(refreshShiftSkus, SHIFT_SKUS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [refreshShiftSkus]);
 
   useEffect(() => {
     loadMachine();
@@ -89,5 +105,5 @@ export function useMachineDetail(id: string) {
     };
   }, [id, loadMachine, refreshHistory]);
 
-  return { machine, error, live, monitoring, history, timeline, skus, connected, reload: loadMachine };
+  return { machine, error, live, monitoring, history, timeline, skus, shiftSkus, connected, reload: loadMachine };
 }

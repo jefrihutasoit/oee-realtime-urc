@@ -254,7 +254,7 @@ function MachineSwitcher({
 }
 
 export default function MachineDetail({ id }: { id: string }) {
-  const { machine, error, live, monitoring, history, timeline, skus, connected, reload } = useMachineDetail(id);
+  const { machine, error, live, monitoring, history, timeline, skus, shiftSkus, connected, reload } = useMachineDetail(id);
   const name = useMachineLabel();
 
   if (!machine) {
@@ -363,6 +363,75 @@ export default function MachineDetail({ id }: { id: string }) {
             })}
           </tbody>
         </table>
+      )}
+    </Card>
+  );
+
+  // SKUs run in the shift now, each with its own OEE (that SKU's part of the shift only).
+  const runningCode = oee && oee.sku.code !== "-" ? oee.sku.code.toLowerCase() : null;
+  const shiftSkusCard = (
+    <Card
+      title="SKU This Shift"
+      aside={
+        shiftSkus
+          ? `${shiftSkus.shiftName} · ${timeFmt.format(new Date(shiftSkus.start)).slice(0, 5)}–${timeFmt.format(new Date(shiftSkus.end)).slice(0, 5)}`
+          : undefined
+      }
+    >
+      {!shiftSkus ? (
+        <p className="px-4 py-4 text-sm text-slate-500">Loading…</p>
+      ) : shiftSkus.skus.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-slate-500">No SKU counted in this shift yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="bg-slate-50 text-left text-xs text-slate-500">
+              <tr>
+                <th className="px-4 py-2 font-medium">SKU</th>
+                <th className="px-4 py-2 font-medium">Time</th>
+                <th className="px-4 py-2 text-right font-medium">Output</th>
+                <th className="px-4 py-2 text-right font-medium">Reject</th>
+                <th className="px-4 py-2 text-right font-medium" title="Availability / Performance / Quality">
+                  A / P / Q
+                </th>
+                <th className="px-4 py-2 text-right font-medium">OEE</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 tabular-nums">
+              {shiftSkus.skus.map((r, i) => {
+                const noSku = r.skuCode === "-";
+                const running = !noSku && i === shiftSkus.skus.length - 1 && r.skuCode.toLowerCase() === runningCode;
+                return (
+                  <tr key={`${r.skuCode}-${r.start}`} className={running ? "bg-emerald-50/40" : undefined}>
+                    <td className="px-4 py-2">
+                      <span className="font-mono font-medium text-slate-900">{noSku ? "No SKU" : r.skuCode}</span>
+                      {running && (
+                        <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          Running
+                        </span>
+                      )}
+                      <span className="block truncate text-xs text-slate-500">
+                        {noSku ? "Downtime without a SKU" : r.productName}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-slate-600">
+                      {r.start ? timeFmt.format(new Date(r.start)).slice(0, 5) : "—"}–
+                      {running ? "now" : r.end ? timeFmt.format(new Date(r.end)).slice(0, 5) : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-900">{withUnit(fmt.format(r.output), machine.outputUnit)}</td>
+                    <td className="px-4 py-2 text-right text-red-600">{fmt.format(r.reject)}</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap text-slate-600">
+                      {[r.availability, r.performance, r.quality].map((v) => (v === null ? "—" : v.toFixed(1))).join(" / ")}
+                    </td>
+                    <td className="px-4 py-2 text-right font-semibold text-slate-900">
+                      {noSku || r.oee === null ? "—" : `${r.oee.toFixed(1)}%`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );
@@ -517,6 +586,7 @@ export default function MachineDetail({ id }: { id: string }) {
                 )}
               </Card>
 
+              {shiftSkusCard}
               {timelineCard}
             </div>
           </div>

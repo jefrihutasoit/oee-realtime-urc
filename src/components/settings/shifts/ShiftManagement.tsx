@@ -5,7 +5,7 @@ import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import Modal, { buttonStyles } from "@/components/ui/Modal";
 import { useCurrentShift } from "@/hooks/useCurrentShift";
 import { formatMinutes, shiftApi, toMinutes } from "@/lib/shift-api";
-import type { Shift, ShiftInput } from "@/types/shift";
+import { WEEKDAYS, dayName, daysLabel, shiftTimesOn, type Shift, type ShiftInput } from "@/types/shift";
 import ShiftFormModal from "./ShiftFormModal";
 
 type FormState = { mode: "create" } | { mode: "edit"; shift: Shift } | null;
@@ -14,18 +14,27 @@ const DAY = 1440;
 const COLORS = ["bg-sky-500", "bg-indigo-500", "bg-teal-500", "bg-violet-500", "bg-cyan-600", "bg-blue-600"];
 const byStart = (a: Shift, b: Shift) => toMinutes(a.start) - toMinutes(b.start);
 
-/** Pieces of the 0–24h day covered by each shift (a shift over midnight gives two pieces), plus the gaps. */
-function coverage(shifts: Shift[]) {
-  const pieces = shifts.flatMap((s, i) => {
-    const from = toMinutes(s.start);
-    const to = from + s.durationMinutes;
-    const color = COLORS[i % COLORS.length];
-    return to <= DAY
-      ? [{ shift: s, from, to, color }]
-      : [
-          { shift: s, from, to: DAY, color },
-          { shift: s, from: 0, to: to - DAY, color },
-        ];
+/**
+ * Pieces of one weekday's 0–24h covered by the shifts: those starting that day, plus the part after midnight
+ * of the previous day's shifts that cross it; and the gaps.
+ */
+function coverage(shifts: Shift[], day: number) {
+  const prev = (day + 6) % 7;
+  const pieces = shifts.flatMap((s) => {
+    const color = COLORS[shifts.indexOf(s) % COLORS.length];
+    const out: { shift: Shift; from: number; to: number; color: string; label: string }[] = [];
+    // This day's times, and the part after midnight of the previous day's occurrence.
+    const today = shiftTimesOn(s, day);
+    if (today) {
+      const from = toMinutes(today.start);
+      out.push({ shift: s, from, to: Math.min(from + today.durationMinutes, DAY), color, label: `${today.start}–${today.end}` });
+    }
+    const before = shiftTimesOn(s, prev);
+    if (before) {
+      const to = toMinutes(before.start) + before.durationMinutes;
+      if (to > DAY) out.push({ shift: s, from: 0, to: to - DAY, color, label: `${before.start}–${before.end}` });
+    }
+    return out;
   });
   const sorted = [...pieces].sort((a, b) => a.from - b.from);
   const gaps: { from: number; to: number }[] = [];
@@ -35,7 +44,8 @@ function coverage(shifts: Shift[]) {
     cursor = Math.max(cursor, p.to);
   }
   if (cursor < DAY) gaps.push({ from: cursor, to: DAY });
-  return { pieces, gaps };
+  const covered = pieces.reduce((sum, p) => sum + (p.to - p.from), 0);
+  return { pieces, gaps, covered };
 }
 
 const label = (minute: number) =>
@@ -98,9 +108,9 @@ export default function ShiftManagement() {
     }
   }
 
-  const { pieces, gaps } = coverage(shifts ?? []);
-  const covered = (shifts ?? []).reduce((sum, s) => sum + s.durationMinutes, 0);
   const pct = (m: number) => `${(m / DAY) * 100}%`;
+  const today = new Date().getDay();
+  const week = WEEKDAYS.map(([day, name]) => ({ day, name, ...coverage(shifts ?? [], day) }));
 
   return (
     <div className="space-y-4">
@@ -138,40 +148,53 @@ export default function ShiftManagement() {
         <>
           <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-900">24-hour coverage</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Weekly coverage</h3>
               <p className="text-xs text-slate-500">
-                {formatMinutes(covered)} of 24h covered
-                {covered < DAY && <span className="text-amber-600"> · {formatMinutes(DAY - covered)} without shift</span>}
                 {current && (
                   <>
-                    {" · "}now: <strong className="text-slate-700">{current.name}</strong>
+                    now: <strong className="text-slate-700">{current.name}</strong>
                   </>
                 )}
               </p>
             </div>
-            <div className="relative h-9 overflow-hidden rounded-md bg-slate-100">
-              {gaps.map((g) => (
-                <div
-                  key={`gap-${g.from}`}
-                  title={`No shift · ${label(g.from)}–${label(g.to)}`}
-                  className="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,#F1F5F9_0_6px,#E2E8F0_6px_12px)]"
-                  style={{ left: pct(g.from), width: pct(g.to - g.from) }}
-                />
-              ))}
-              {pieces.map((p) => (
-                <div
-                  key={`${p.shift.id}-${p.from}`}
-                  title={`${p.shift.name} · ${p.shift.start}–${p.shift.end}`}
-                  className={`absolute inset-y-0 flex items-center justify-center overflow-hidden border-r border-white/60 text-xs font-medium whitespace-nowrap text-white ${p.color} ${
-                    current?.shiftId === p.shift.id ? "ring-2 ring-(--brand-ink) ring-inset" : ""
-                  }`}
-                  style={{ left: pct(p.from), width: pct(p.to - p.from) }}
-                >
-                  {p.to - p.from >= 90 ? p.shift.name : ""}
+            <div className="space-y-1.5">
+              {week.map((w) => (
+                <div key={w.day} className="flex items-center gap-2">
+                  <span
+                    className={`w-9 shrink-0 text-xs font-medium ${w.day === today ? "text-(--brand)" : "text-slate-500"}`}
+                    title={w.covered < DAY ? `${formatMinutes(DAY - w.covered)} without shift` : "Fully covered"}
+                  >
+                    {w.name}
+                  </span>
+                  <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-slate-100">
+                    {w.gaps.map((g) => (
+                      <div
+                        key={`gap-${g.from}`}
+                        title={`No shift · ${label(g.from)}–${label(g.to)}`}
+                        className="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,#F1F5F9_0_6px,#E2E8F0_6px_12px)]"
+                        style={{ left: pct(g.from), width: pct(g.to - g.from) }}
+                      />
+                    ))}
+                    {w.pieces.map((p) => (
+                      <div
+                        key={`${p.shift.id}-${p.from}`}
+                        title={`${p.shift.name} · ${p.label}`}
+                        className={`absolute inset-y-0 flex items-center justify-center overflow-hidden border-r border-white/60 text-[11px] font-medium whitespace-nowrap text-white ${p.color} ${
+                          w.day === today && current?.shiftId === p.shift.id ? "ring-2 ring-(--brand-ink) ring-inset" : ""
+                        }`}
+                        style={{ left: pct(p.from), width: pct(p.to - p.from) }}
+                      >
+                        {p.to - p.from >= 120 ? p.shift.name : ""}
+                      </div>
+                    ))}
+                  </div>
+                  <span className={`w-14 shrink-0 text-right text-[11px] tabular-nums ${w.covered < DAY ? "text-amber-600" : "text-slate-400"}`}>
+                    {formatMinutes(w.covered)}
+                  </span>
                 </div>
               ))}
             </div>
-            <div className="relative h-4 text-[11px] text-slate-400 tabular-nums">
+            <div className="relative mr-16 ml-11 h-4 text-[11px] text-slate-400 tabular-nums">
               {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h, i, all) => (
                 <span
                   key={h}
@@ -192,13 +215,14 @@ export default function ShiftManagement() {
                   <th className="px-4 py-2.5 font-medium">Start</th>
                   <th className="px-4 py-2.5 font-medium">End</th>
                   <th className="px-4 py-2.5 font-medium">Duration</th>
+                  <th className="px-4 py-2.5 font-medium">Days</th>
                   <th className="px-4 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 tabular-nums">
                 {shifts.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
                       No shifts defined. The whole day counts as one &quot;No shift&quot; period.
                     </td>
                   </tr>
@@ -224,6 +248,24 @@ export default function ShiftManagement() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-slate-700">{formatMinutes(s.durationMinutes)}</td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+                            s.days.length === 7 ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-800"
+                          }`}
+                        >
+                          {daysLabel(s.days)}
+                        </span>
+                        {s.dayTimes.map((t) => (
+                          <span
+                            key={t.day}
+                            className="mt-1 block text-xs whitespace-nowrap text-slate-500"
+                            title="Other times on this day"
+                          >
+                            {dayName(t.day)} <span className="font-mono text-slate-700">{t.start}–{t.end}</span>
+                          </span>
+                        ))}
+                      </td>
                       <td className="px-4 py-2.5">
                         <div className="flex justify-end gap-1">
                           <button

@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpRight, ChartLine, Layers, LayoutGrid, Loader2, RefreshCw, RotateCcw, X } from "lucide-react";
+import { ArrowUpRight, ChartLine, ChevronDown, Layers, LayoutGrid, Loader2, Plus, RefreshCw, RotateCcw, X } from "lucide-react";
 import { buttonStyles } from "@/components/ui/Modal";
 import { machineApi } from "@/lib/machine-api";
-import { useMachineLabel } from "@/lib/machine-label";
 import type { MachineRegistration } from "@/types/machine";
 import type { MachineTrend, TrendSignal } from "@/types/trend";
 import TrendChart, {
@@ -20,10 +19,13 @@ import TrendChart, {
   type ChartSeries,
 } from "./TrendChart";
 
-// Trend of one machine's signals: Combined (the default) puts every chosen signal in one chart — one Y axis
-// per unit, or every signal scaled to its own range when there are more units than axes — and Individual
-// gives every chosen signal its own chart. Preset ranges end now and refresh while open;
-// dragging across a chart zooms into that part. Machine, range, view and signals are kept in the URL.
+// Trend of machine signals, for one machine (the default) or several compared. Every machine has its own
+// signal list: a dropdown under the machine checks and unchecks its signals. Combined (the default) puts every
+// checked signal in one chart — one Y axis per unit, or every signal scaled to its own range when there are
+// more units than axes — and Individual gives every checked signal its own chart. One machine shows its status
+// band; compared machines show their status in the tooltip. Preset ranges end now and refresh while open;
+// dragging across a chart zooms into that part. Machines, range, view and checked signals are kept in the URL
+// (`machine=id1,id2`, `signals=id1~key.key;id2~key`).
 
 type View = "combined" | "individual";
 type RangeKey = "15m" | "1h" | "4h" | "8h" | "24h" | "7d" | "custom";
@@ -44,7 +46,9 @@ const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
 const DASHES = [undefined, "6 3", "2 3", "8 3 2 3"];
 /** One chart can carry this many units (two axes on each side); with more, Combined is normalized. */
 const MAX_AXES = 4;
-const INDIVIDUAL_COLOR = SERIES[0];
+const MAX_MACHINES = 8;
+/** Signals checked when a machine is opened: the basic output counter (the status is always shown). */
+const DEFAULT_SIGNALS = ["output"];
 
 const inputClass =
   "h-9 rounded-lg border border-slate-200 bg-surface px-3 text-sm text-slate-800 focus:border-blue-400 focus:outline-none";
@@ -56,6 +60,24 @@ const localInput = (t: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 const bucketLabel = (s: number) => (s < 60 ? `${s} s` : s < 3600 ? `${s / 60} min` : `${s / 3600} h`);
+const machineText = (m: Pick<MachineRegistration, "machineNo" | "machineName">) =>
+  `${m.machineNo}${m.machineName ? ` · ${m.machineName}` : ""}`;
+
+/** Checked signal keys per machine, in the URL: `id1~key.key;id2~key` (parts URI-encoded). */
+type Picks = Record<string, string[]>;
+const enc = encodeURIComponent;
+function parsePicks(text: string | null): Picks {
+  const out: Picks = {};
+  for (const part of (text ?? "").split(";")) {
+    const [id, keys] = part.split("~");
+    if (id && keys !== undefined) out[decodeURIComponent(id)] = keys ? keys.split(".").map(decodeURIComponent) : [];
+  }
+  return out;
+}
+const writePicks = (p: Picks) =>
+  Object.entries(p)
+    .map(([id, keys]) => `${enc(id)}~${keys.map(enc).join(".")}`)
+    .join(";");
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-xl border border-slate-200 bg-surface p-4 ${className}`}>{children}</div>;
@@ -91,24 +113,113 @@ function StatusLegend() {
   );
 }
 
+/** Dropdown with a checkbox per signal of one machine. */
+function SignalMenu({
+  signals,
+  checked,
+  colorOf,
+  onChange,
+}: {
+  signals: TrendSignal[] | null;
+  checked: Set<string>;
+  colorOf: (key: string) => string | undefined;
+  onChange: (keys: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const count = signals ? signals.filter((s) => checked.has(s.key)).length : 0;
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={!signals}
+        aria-expanded={open}
+        className="inline-flex h-7 w-full items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-surface px-2 text-xs text-slate-600 hover:border-slate-300 disabled:opacity-50"
+      >
+        <span>
+          Signals{" "}
+          <span className="font-semibold text-slate-900 tabular-nums">
+            {signals ? `${count}/${signals.length}` : "…"}
+          </span>
+        </span>
+        <ChevronDown size={14} className={open ? "rotate-180" : undefined} />
+      </button>
+      {open && signals && (
+        <div className="absolute top-full left-0 z-30 mt-1 w-64 rounded-lg border border-slate-200 bg-surface p-1 shadow-lg">
+          <div className="flex justify-between border-b border-slate-100 px-2 pt-1 pb-1.5 text-xs font-medium">
+            <button type="button" className="text-(--brand) hover:underline" onClick={() => onChange(signals.map((s) => s.key))}>
+              Check all
+            </button>
+            <button type="button" className="text-(--brand) hover:underline" onClick={() => onChange([])}>
+              Uncheck all
+            </button>
+          </div>
+          <ul className="max-h-72 overflow-y-auto py-1">
+            {signals.map((s) => {
+              const on = checked.has(s.key);
+              const color = colorOf(s.key);
+              return (
+                <li key={s.key}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() =>
+                        onChange(on ? [...checked].filter((k) => k !== s.key) : [...checked, s.key])
+                      }
+                      className="size-4 accent-(--brand)"
+                    />
+                    <span className="min-w-0 flex-1 truncate" title={s.tagName}>
+                      {s.name}
+                    </span>
+                    {s.unit && <span className="text-xs text-slate-400">{s.unit}</span>}
+                    {on && color && <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />}
+                  </label>
+                </li>
+              );
+            })}
+            {!signals.length && <li className="px-2 py-2 text-xs text-slate-400">No signals on this machine.</li>}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A drawn line: one checked signal of one machine. */
+type Line = ChartSeries & { trend: MachineTrend; label: string };
+
 export default function Trend() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const name = useMachineLabel();
 
   const [machines, setMachines] = useState<MachineRegistration[] | null>(null);
-  const [data, setData] = useState<MachineTrend | null>(null);
+  const [data, setData] = useState<{ key: string; trends: MachineTrend[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hoverT, setHoverT] = useState<number | null>(null);
-  /** Chosen signals of one machine and their color slot. A slot stays with its signal while it is chosen. */
-  const [slots, setSlots] = useState<{ machineId: string; byKey: Record<string, number> } | null>(null);
-  /** Signal names to choose again after switching to `machineId`. */
-  const [carry, setCarry] = useState<{ machineId: string; names: string[] } | null>(null);
+  /** For an added machine: the signal names to check once its signals are known. */
+  const [nameHints, setNameHints] = useState<Record<string, string[]>>({});
   const request = useRef(0);
 
-  const machineId = params.get("machine") ?? "";
+  const machineParam = params.get("machine") ?? "";
+  const machineIds = useMemo(() => machineParam.split(",").filter(Boolean), [machineParam]);
+  const compare = machineIds.length > 1;
   const view: View = params.get("view") === "individual" ? "individual" : "combined";
   const rangeKey = (PRESETS.some((p) => p.key === params.get("range")) || params.get("range") === "custom"
     ? params.get("range")
@@ -118,6 +229,8 @@ export default function Trend() {
   const customTo = Number(params.get("to"));
   const custom = rangeKey === "custom" && customFrom > 0 && customTo > customFrom;
   const back = PRESETS.find((p) => p.key === params.get("back"));
+  const signalsParam = params.get("signals");
+  const urlPicks = useMemo(() => parsePicks(signalsParam), [signalsParam]);
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -144,27 +257,30 @@ export default function Trend() {
       .catch((err: Error) => setError(err.message));
   }, []);
 
-  // Without a machine in the URL, open the first one.
+  // Keep only machines that exist (at most MAX_MACHINES); without any, open the first one.
   useEffect(() => {
-    if (machines?.length && !machines.some((m) => m.id === machineId)) setParams({ machine: machines[0].id, signals: null });
-  }, [machines, machineId, setParams]);
+    if (!machines?.length) return;
+    const valid = [...new Set(machineIds)].filter((id) => machines.some((m) => m.id === id)).slice(0, MAX_MACHINES);
+    if (!valid.length) setParams({ machine: machines[0].id });
+    else if (valid.join(",") !== machineParam) setParams({ machine: valid.join(",") });
+  }, [machines, machineIds, machineParam, setParams]);
 
   const load = useCallback(() => {
-    if (!machineId) return;
+    if (!machineIds.length) return;
+    // One range for every machine, so their lines share the time axis.
     const now = Date.now();
     const from = preset ? now - preset.ms : custom ? customFrom : now - HOUR;
     const to = preset ? now : custom ? customTo : now;
     const id = ++request.current;
-    machineApi
-      .trend(machineId, from, to)
-      .then((t) => {
+    Promise.all(machineIds.map((m) => machineApi.trend(m, from, to)))
+      .then((trends) => {
         if (id !== request.current) return;
-        setData(t);
+        setData({ key: machineParam, trends });
         setError(null);
       })
       .catch((err: Error) => id === request.current && setError(err.message))
       .finally(() => id === request.current && setLoading(false));
-  }, [machineId, preset, custom, customFrom, customTo]);
+  }, [machineIds, machineParam, preset, custom, customFrom, customTo]);
 
   useEffect(() => {
     load();
@@ -173,45 +289,49 @@ export default function Trend() {
     return () => clearInterval(timer);
   }, [load, preset]);
 
-  const current = data && data.machineId === machineId ? data : null;
+  const current = data && data.key === machineParam ? data.trends : null;
+  const primary = current?.[0] ?? null;
+  const trendOf = (id: string) => current?.find((t) => t.machineId === id) ?? null;
 
-  // Until signals are picked on this machine: the names carried over from the last machine, the URL, or all.
-  const signalsParam = params.get("signals");
-  const byKey = useMemo(() => {
-    if (!current) return null;
-    if (slots?.machineId === current.machineId) return slots.byKey;
-    const keys = current.signals.map((s) => s.key);
-    const carried =
-      carry?.machineId === current.machineId
-        ? current.signals.filter((s) => carry.names.includes(s.name)).map((s) => s.key)
-        : [];
-    const fromUrl = signalsParam?.split(",").filter((k) => keys.includes(k)) ?? [];
-    const chosen = carried.length ? carried : fromUrl.length ? fromUrl : keys;
-    return Object.fromEntries(chosen.map((k, i) => [k, i])) as Record<string, number>;
-  }, [current, slots, carry, signalsParam]);
-
-  const writeSlots = (next: Record<string, number>) => {
-    setSlots({ machineId, byKey: next });
-    const keys = Object.keys(next).sort((a, b) => next[a] - next[b]);
-    setParams({ signals: current && keys.length === current.signals.length ? null : keys.join(",") || null });
-  };
-  const toggle = (key: string) => {
-    if (!byKey) return;
-    const next = { ...byKey };
-    if (key in next) delete next[key];
-    else {
-      const used = new Set(Object.values(next));
-      let slot = 0;
-      while (used.has(slot)) slot++;
-      next[key] = slot;
+  /**
+   * Checked signal keys of a machine: as checked (URL); for an added machine, the signals named like the
+   * ones checked on the first machine; else the basic one, Output (the status is always shown as a band).
+   */
+  const checkedOf = (t: MachineTrend): string[] => {
+    const keys = t.signals.map((s) => s.key);
+    const picked = urlPicks[t.machineId];
+    if (picked) return picked.filter((k) => keys.includes(k));
+    const hint = nameHints[t.machineId];
+    if (hint) {
+      const named = t.signals.filter((s) => hint.includes(s.name)).map((s) => s.key);
+      if (named.length) return named;
     }
-    writeSlots(next);
+    return keys.filter((k) => DEFAULT_SIGNALS.includes(k));
   };
 
-  const changeMachine = (id: string) => {
-    if (current && byKey) setCarry({ machineId: id, names: current.signals.filter((s) => s.key in byKey).map((s) => s.name) });
-    setParams({ machine: id, signals: null });
+  const setChecked = (machineId: string, keys: string[]) => {
+    const next: Picks = {};
+    for (const t of current ?? []) next[t.machineId] = t.machineId === machineId ? keys : checkedOf(t);
+    setParams({ signals: writePicks(next) });
   };
+
+  const setMachineIds = (ids: string[]) => {
+    // Checked signals of machines no longer shown are dropped from the URL.
+    const kept = Object.fromEntries(Object.entries(urlPicks).filter(([id]) => ids.includes(id)));
+    setParams({ machine: ids.join(","), signals: Object.keys(kept).length ? writePicks(kept) : null });
+  };
+  const changePrimary = (id: string) => setMachineIds([id, ...machineIds.slice(1).filter((m) => m !== id)]);
+  const addMachine = (id: string) => {
+    if (!id) return;
+    const first = primary;
+    if (first) {
+      const names = first.signals.filter((s) => checkedOf(first).includes(s.key)).map((s) => s.name);
+      setNameHints((h) => ({ ...h, [id]: names }));
+    }
+    setMachineIds([...machineIds, id]);
+  };
+  const removeMachine = (id: string) => setMachineIds(machineIds.filter((m) => m !== id));
+
   const zoom = (a: number, b: number) =>
     setParams({
       range: "custom",
@@ -220,63 +340,145 @@ export default function Trend() {
       back: preset?.key ?? params.get("back"),
     });
 
-  // ---- what each view draws
-  const chosen = useMemo(
-    () => (current && byKey ? current.signals.filter((s) => s.key in byKey) : []),
-    [current, byKey]
-  );
-  const combined = useMemo(() => {
-    const series: ChartSeries[] = [];
-    const axes: (ChartAxis & { key: string })[] = [];
-    if (!byKey) return { series, axes, normalized: false };
-    for (const signal of [...chosen].sort((a, b) => byKey[a.key] - byKey[b.key])) {
-      const slot = byKey[signal.key];
-      const axisKey = signal.unit || `#${signal.key}`;
-      let axis = axes.findIndex((a) => a.key === axisKey);
-      if (axis < 0) axis = axes.push({ key: axisKey, label: signal.unit || signal.name }) - 1;
-      series.push({
-        signal,
-        color: SERIES[slot % SERIES.length],
-        dash: DASHES[Math.floor(slot / SERIES.length) % DASHES.length],
-        axis,
-      });
+  // ---- what each view draws: every checked signal of every machine, machine by machine
+  const lines = useMemo(() => {
+    const out: Line[] = [];
+    for (const t of current ?? []) {
+      const checked = new Set(checkedOf(t));
+      for (const signal of t.signals) {
+        if (!checked.has(signal.key)) continue;
+        const i = out.length;
+        out.push({
+          signal,
+          trend: t,
+          id: `${t.machineId}:${signal.key}`,
+          axis: 0,
+          color: SERIES[i % SERIES.length],
+          dash: DASHES[Math.floor(i / SERIES.length) % DASHES.length],
+          label: compare ? `${t.machineNo} · ${signal.name}` : signal.name,
+        });
+      }
     }
-    return { series, axes, normalized: axes.length > MAX_AXES };
-  }, [chosen, byKey]);
+    return out;
+    // checkedOf reads urlPicks and nameHints.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, urlPicks, nameHints, compare]);
 
-  const machine = machines?.find((m) => m.id === machineId);
-  const from = current ? Date.parse(current.from) : 0;
-  const to = current ? Date.parse(current.to) : 0;
-  const bucketMs = (current?.bucketSeconds ?? 1) * 1000;
+  const combined = useMemo(() => {
+    const axes: (ChartAxis & { key: string })[] = [];
+    const series = lines.map((l) => {
+      const axisKey = l.signal.unit || `#${l.id}`;
+      let axis = axes.findIndex((a) => a.key === axisKey);
+      if (axis < 0) axis = axes.push({ key: axisKey, label: l.signal.unit || l.signal.name }) - 1;
+      return { ...l, axis };
+    });
+    return { series, axes, normalized: axes.length > MAX_AXES };
+  }, [lines]);
+
+  const selected = machineIds.map((id) => machines?.find((m) => m.id === id)).filter((m): m is MachineRegistration => !!m);
+  const from = primary ? Date.parse(primary.from) : 0;
+  const to = primary ? Date.parse(primary.to) : 0;
+  const bucketMs = (primary?.bucketSeconds ?? 1) * 1000;
   const span = to - from;
-  const statusLine = (t: number) => {
-    const st = current ? statusAt(current.status, t) : null;
-    return { value: formatTime(t, span), label: st ? statusLabel(st) : "" };
-  };
   const valueText = (s: TrendSignal, t: number) => {
     const { value, range } = valueAt(s, t, bucketMs);
     return range ? `${formatValue(value, s.unit)} (${formatValue(range[0])}–${formatValue(range[1])})` : formatValue(value, s.unit);
   };
+  // A single machine shows its status band; compared machines show their status in the tooltip.
+  const band = !compare && primary ? primary.status : [];
+  const tooltipHead = (t: number) => {
+    if (!compare) {
+      const st = primary ? statusAt(primary.status, t) : null;
+      return [{ value: formatTime(t, span), label: st ? statusLabel(st) : "" }];
+    }
+    return [
+      { value: formatTime(t, span), label: "" },
+      ...(current ?? []).map((tr) => {
+        const st = statusAt(tr.status, t);
+        return { value: st ? statusLabel(st) : "—", label: tr.machineNo };
+      }),
+    ];
+  };
 
-  // ---- controls
+  // ---- machines, each with its signal dropdown
+  const remaining = (machines ?? []).filter((m) => !machineIds.includes(m.id));
+  const signalMenu = (id: string) => {
+    const t = trendOf(id);
+    return (
+      <SignalMenu
+        signals={t?.signals ?? null}
+        checked={new Set(t ? checkedOf(t) : [])}
+        colorOf={(key) => lines.find((l) => l.id === `${id}:${key}`)?.color}
+        onChange={(keys) => setChecked(id, keys)}
+      />
+    );
+  };
+  const machinePicker = (
+    <div>
+      <span className="mb-1 block text-xs font-medium text-slate-600">
+        Machine
+        {compare && <span className="font-normal text-slate-400"> · comparing {machineIds.length}</span>}
+      </span>
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="w-52 space-y-1">
+          <select
+            value={machineIds[0] ?? ""}
+            onChange={(e) => changePrimary(e.target.value)}
+            className={`${inputClass} w-full`}
+            disabled={!machines?.length}
+            aria-label="Machine"
+          >
+            {machines?.map((m) => (
+              <option key={m.id} value={m.id}>
+                {machineText(m)}
+              </option>
+            ))}
+          </select>
+          {machineIds[0] && signalMenu(machineIds[0])}
+        </div>
+        {selected.slice(1).map((m) => (
+          <div key={m.id} className="w-44 space-y-1">
+            <span className="flex h-9 items-center justify-between gap-1.5 rounded-lg border border-slate-200 bg-surface pr-1 pl-2.5 text-sm text-slate-800">
+              <span className="truncate" title={machineText(m)}>
+                {m.machineNo}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeMachine(m.id)}
+                aria-label={`Remove ${m.machineNo} from the comparison`}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={14} />
+              </button>
+            </span>
+            {signalMenu(m.id)}
+          </div>
+        ))}
+        {machineIds.length < MAX_MACHINES && remaining.length > 0 && (
+          <label className="relative inline-flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2.5 text-sm font-medium text-(--brand) hover:border-(--brand)">
+            <Plus size={14} /> Add machine
+            <select
+              value=""
+              onChange={(e) => addMachine(e.target.value)}
+              aria-label="Add a machine to compare"
+              className="absolute inset-0 cursor-pointer opacity-0"
+            >
+              <option value="">Compare with…</option>
+              {remaining.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {machineText(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+    </div>
+  );
+
+  // ---- range, view, refresh
   const controls = (
     <div className="flex flex-wrap items-end gap-3">
-      <label className="min-w-40">
-        <span className="mb-1 block text-xs font-medium text-slate-600">{name.one}</span>
-        <select
-          value={machineId}
-          onChange={(e) => changeMachine(e.target.value)}
-          className={`${inputClass} w-full`}
-          disabled={!machines?.length}
-        >
-          {machines?.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.machineNo}
-              {m.machineName ? ` · ${m.machineName}` : ""}
-            </option>
-          ))}
-        </select>
-      </label>
       <div>
         <span className="mb-1 block text-xs font-medium text-slate-600">Range</span>
         <div className="flex flex-wrap items-center gap-2">
@@ -296,7 +498,7 @@ export default function Trend() {
             <button
               type="button"
               onClick={() =>
-                current &&
+                primary &&
                 setParams({ range: "custom", from: String(from), to: String(to), back: preset?.key ?? params.get("back") })
               }
               className={`rounded-md px-2.5 text-sm font-medium ${
@@ -363,7 +565,7 @@ export default function Trend() {
           setLoading(true);
           load();
         }}
-        disabled={loading || !machineId}
+        disabled={loading || !machineIds.length}
         className={`${buttonStyles.secondary} w-9 px-0`}
         aria-label="Refresh"
         title="Refresh"
@@ -373,53 +575,9 @@ export default function Trend() {
     </div>
   );
 
-  // ---- signal picker
-  const picker = current && byKey && (
-    <Card className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">
-          Signals <span className="font-normal text-slate-500">· {chosen.length} of {current.signals.length}</span>
-        </p>
-        <div className="flex gap-3 text-xs font-medium">
-          <button type="button" className="text-(--brand) hover:underline" onClick={() => writeSlots(Object.fromEntries(current.signals.map((s, i) => [s.key, i])))}>
-            All
-          </button>
-          <button type="button" className="text-(--brand) hover:underline" onClick={() => writeSlots({})}>
-            None
-          </button>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {current.signals.map((s) => {
-          const on = s.key in byKey;
-          const color = combined.series.find((c) => c.signal.key === s.key)?.color;
-          return (
-            <button
-              key={s.key}
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggle(s.key)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                on ? "border-slate-300 bg-slate-50 text-slate-800" : "border-slate-200 text-slate-400 hover:text-slate-600"
-              }`}
-            >
-              {view === "combined" && on ? (
-                <span className="size-2 rounded-full" style={{ background: color }} />
-              ) : (
-                <span className={`size-2 rounded-full ${on ? "bg-slate-500" : "border border-slate-300"}`} />
-              )}
-              {s.name}
-              {s.unit && <span className="font-normal text-slate-400">{s.unit}</span>}
-            </button>
-          );
-        })}
-      </div>
-    </Card>
-  );
-
   // ---- body
   let body: React.ReactNode;
-  if (!current || !byKey) {
+  if (!current || !primary) {
     body = (
       <div className="flex flex-col items-center gap-3 py-24 text-sm text-slate-500">
         {error ? (
@@ -430,7 +588,7 @@ export default function Trend() {
             </button>
           </>
         ) : machines && !machines.length ? (
-          <p>No active {name.many.toLowerCase()}.</p>
+          <p>No active machines.</p>
         ) : (
           <>
             <Loader2 size={22} className="animate-spin" />
@@ -439,25 +597,30 @@ export default function Trend() {
         )}
       </div>
     );
-  } else if (!chosen.length) {
-    body = <p className="py-16 text-center text-sm text-slate-500">Choose one or more signals above.</p>;
+  } else if (!lines.length) {
+    body = <p className="py-16 text-center text-sm text-slate-500">Check one or more signals under a machine.</p>;
   } else if (view === "combined") {
     body = (
       <Card>
         <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1.5">
           {combined.series.map((s) => (
-            <span key={s.signal.key} className="inline-flex items-center gap-1.5 text-sm">
+            <span key={s.id} className="inline-flex items-center gap-1.5 text-sm">
               <svg width={16} height={4} className="shrink-0" aria-hidden>
                 <line x1={1} x2={15} y1={2} y2={2} stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} strokeLinecap="round" />
               </svg>
-              <span className="text-slate-600">{s.signal.name}</span>
+              <span className="text-slate-600">{s.label}</span>
               <span className="font-semibold text-slate-900 tabular-nums">
                 {formatValue(hoverT !== null ? valueAt(s.signal, hoverT, bucketMs).value : stats(s.signal).last, s.signal.unit)}
               </span>
               <button
                 type="button"
-                onClick={() => toggle(s.signal.key)}
-                aria-label={`Remove ${s.signal.name}`}
+                onClick={() =>
+                  setChecked(
+                    s.trend.machineId,
+                    checkedOf(s.trend).filter((k) => k !== s.signal.key)
+                  )
+                }
+                aria-label={`Uncheck ${s.label}`}
                 className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X size={12} />
@@ -471,14 +634,19 @@ export default function Trend() {
           from={from}
           to={to}
           bucketMs={bucketMs}
-          status={current.status}
-          height={420}
+          status={band}
+          // Compared: a status band per machine, labelled with its number.
+          statusRows={compare ? current.map((t) => ({ label: t.machineNo, segments: t.status })) : undefined}
+          height={420 + (compare ? (current.length - 1) * 10 : 0)}
           normalized={combined.normalized}
           hoverT={hoverT}
           onHover={setHoverT}
           onZoom={zoom}
-          label={`${current.machineNo} combined trend`}
-          tooltip={(t) => [statusLine(t), ...combined.series.map((s) => ({ color: s.color, value: valueText(s.signal, t), label: s.signal.name }))]}
+          label={`${selected.map((m) => m.machineNo).join(", ")} combined trend`}
+          tooltip={(t) => [
+            ...tooltipHead(t),
+            ...combined.series.map((s) => ({ color: s.color, value: valueText(s.signal, t), label: s.label })),
+          ]}
         />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <StatusLegend />
@@ -495,16 +663,17 @@ export default function Trend() {
     body = (
       <div className="space-y-2">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-          {chosen.map((s) => {
+          {lines.map((l) => {
+            const s = l.signal;
             const st = stats(s);
             const shown = hoverT !== null ? valueAt(s, hoverT, bucketMs).value : st.last;
             const empty = s.start === null && !s.points.length;
             return (
-              <Card key={s.key} className="p-3">
+              <Card key={l.id} className="p-3">
                 <div className="mb-1 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-900" title={s.tagName}>
-                      {s.name}
+                      {l.label}
                     </p>
                     <p className="text-[11px] text-slate-500 tabular-nums">
                       {st.lo === null ? "No readings" : `Min ${formatValue(st.lo)} · Max ${formatValue(st.hi)}`}
@@ -516,18 +685,25 @@ export default function Trend() {
                   <p className="flex h-[150px] items-center justify-center text-xs text-slate-400">No readings in this range</p>
                 ) : (
                   <TrendChart
-                    series={[{ signal: s, color: INDIVIDUAL_COLOR, axis: 0 }]}
+                    series={[{ ...l, axis: 0, dash: undefined }]}
                     axes={[{ label: s.unit }]}
                     from={from}
                     to={to}
                     bucketMs={bucketMs}
-                    status={current.status}
+                    // Each chart is one machine: it shows that machine's status band.
+                    status={l.trend.status}
                     height={150}
                     hoverT={hoverT}
                     onHover={setHoverT}
                     onZoom={zoom}
-                    label={`${s.name} trend`}
-                    tooltip={(t) => [statusLine(t), { value: valueText(s, t), label: s.name }]}
+                    label={`${l.label} trend`}
+                    tooltip={(t) => {
+                      const stt = statusAt(l.trend.status, t);
+                      return [
+                        { value: formatTime(t, span), label: stt ? statusLabel(stt) : "" },
+                        { color: l.color, value: valueText(s, t), label: l.label },
+                      ];
+                    }}
                   />
                 )}
               </Card>
@@ -539,6 +715,7 @@ export default function Trend() {
     );
   }
 
+  const first = selected[0];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -547,8 +724,8 @@ export default function Trend() {
             <ChartLine size={20} className="text-(--brand)" /> Trend
           </h2>
           <p className="text-sm text-slate-500">
-            {machine ? `${machine.machineNo}${machine.machineName ? ` · ${machine.machineName}` : ""}` : "—"}
-            {current && ` · ${formatTime(from, span)} – ${formatTime(to, span)} · 1 point = ${bucketLabel(current.bucketSeconds)}`}
+            {compare ? `Comparing ${selected.map((m) => m.machineNo).join(", ")}` : first ? machineText(first) : "—"}
+            {primary && ` · ${formatTime(from, span)} – ${formatTime(to, span)} · 1 point = ${bucketLabel(primary.bucketSeconds)}`}
             {preset && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
                 <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" /> Live
@@ -556,15 +733,17 @@ export default function Trend() {
             )}
           </p>
         </div>
-        {machine && (
-          <Link href={`/dashboard/machine/${machine.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-(--brand) hover:underline">
-            {name.one} detail <ArrowUpRight size={14} />
+        {first && !compare && (
+          <Link href={`/dashboard/machine/${first.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-(--brand) hover:underline">
+            Machine detail <ArrowUpRight size={14} />
           </Link>
         )}
       </div>
-      {controls}
+      <Card className="space-y-4">
+        {machinePicker}
+        {controls}
+      </Card>
       {error && current && <p className="text-sm text-red-600">{error}</p>}
-      {picker}
       <div className={loading && current ? "opacity-60 transition-opacity" : undefined}>{body}</div>
       {current && <p className="text-xs text-slate-400">Drag across a chart to zoom in. Shaded bands show the lowest and highest value inside one point.</p>}
     </div>

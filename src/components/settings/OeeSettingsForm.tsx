@@ -133,6 +133,28 @@ export default function OeeSettingsForm() {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-3xl space-y-4">
+      <div className="space-y-1.5 rounded-xl border border-slate-200 bg-surface px-5 py-4">
+        <p className="text-sm font-medium text-slate-700">OEE counting</p>
+        <ChoiceGroup
+          name="countingMode"
+          value={settings.countingMode}
+          onChange={(v) => set("countingMode", v)}
+          options={[
+            {
+              value: "sku",
+              label: "Per SKU run",
+              hint: "OEE restarts at every shift and (with the option below) at every SKU change.",
+            },
+            {
+              value: "shift",
+              label: "Full shift",
+              hint:
+                "One OEE for the whole shift, reset at every shift change. The target follows the active SKU; when a registered SKU is required, time without one is downtime. Each SKU's own OEE is recorded in the Summary.",
+            },
+          ]}
+        />
+      </div>
+
       <div className="space-y-4 rounded-xl border border-slate-200 bg-surface px-5 py-4">
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-slate-700">Start counting</p>
@@ -147,6 +169,11 @@ export default function OeeSettingsForm() {
                 hint: "Product tag must hold a SKU ID from SKU Management.",
               },
               { value: "always", label: "Always", hint: "Counts without a SKU; unknown SKUs use the default ideal rate." },
+              {
+                value: "notOff",
+                label: "When the machine is not Off",
+                hint: "Counts while the status is Run or Stop; Off time is not counted. No SKU needed (unknown SKUs use the default ideal rate).",
+              },
             ]}
           />
         </div>
@@ -233,12 +260,14 @@ export default function OeeSettingsForm() {
       </div>
 
       <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-surface">
-        <ToggleRow
-          label="Restart OEE when SKU changes"
-          hint="A new SKU starts a fresh run. Only checked while the machine is not Off."
-          checked={settings.resetOnSkuChange}
-          onChange={(v) => set("resetOnSkuChange", v)}
-        />
+        {settings.countingMode === "sku" && (
+          <ToggleRow
+            label="Restart OEE when SKU changes"
+            hint="A new SKU starts a fresh run. Only checked while the machine is not Off."
+            checked={settings.resetOnSkuChange}
+            onChange={(v) => set("resetOnSkuChange", v)}
+          />
+        )}
         <ToggleRow
           label="Pause while machine is Off"
           hint="Off time is not counted. When disabled, Off counts as downtime in Availability."
@@ -276,7 +305,7 @@ export default function OeeSettingsForm() {
 
         {settings.finishRules.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-300 py-4 text-center text-sm text-slate-500">
-            No finish rules: a run only ends at shift end{settings.resetOnSkuChange ? " or on a SKU change" : ""}.
+            No finish rules: a run only ends at shift end{settings.countingMode === "sku" && settings.resetOnSkuChange ? " or on a SKU change" : ""}.
           </p>
         ) : (
           settings.finishRules.map((rule, i) => (

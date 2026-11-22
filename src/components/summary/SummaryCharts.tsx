@@ -147,7 +147,14 @@ export function OeeTrendChart({
 const OUTPUT_COLOR = "#1E6FD9";
 const REJECT_COLOR = "#E5484D";
 
-/** Output and reject per hour or day as paired bars on one axis. */
+/** Reject as a share of output, in percent; null without output. */
+const rejectRate = (d: { output: number; reject: number }) => (d.output > 0 ? (d.reject / d.output) * 100 : null);
+const pctFmt = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)}%`;
+
+/**
+ * Output and reject per hour or day. "%" (default): the reject rate (reject / output) per point;
+ * "qty": output and reject as paired bars on one axis.
+ */
 export function OutputRejectChart({
   data,
   bucket,
@@ -158,12 +165,19 @@ export function OutputRejectChart({
   units: ProductionUnits;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const max = niceMax(Math.max(...data.map((d) => Math.max(d.output, d.reject))));
+  const [mode, setMode] = useState<"pct" | "qty">("pct");
+  const pct = mode === "pct";
+  const max = pct
+    ? niceMax(Math.max(1, ...data.map((d) => rejectRate(d) ?? 0)))
+    : niceMax(Math.max(...data.map((d) => Math.max(d.output, d.reject))));
   const slot = plotW / data.length;
   // Bars stay inside their slot, which is narrow for long day ranges.
   const barW = Math.min(10, Math.max(3, slot / 2 - 3), slot / 2 - 0.5);
   const y = (v: number) => PAD.top + plotH - (plotH * v) / max;
   const h = hover !== null ? data[hover] : null;
+  // Percent labels above the bars: smaller on narrow slots, left out when they cannot fit ("12.3%" ≈ 5 chars).
+  const labelSize = Math.min(10, slot / 3);
+  const showLabels = labelSize >= 6;
 
   /** Bar with a 2px rounded top, anchored to the baseline. */
   const bar = (x: number, v: number, color: string) => {
@@ -175,23 +189,81 @@ export function OutputRejectChart({
 
   return (
     <div className="relative">
-      <div className="mb-1 flex gap-4 text-xs text-slate-600">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full" style={{ background: OUTPUT_COLOR }} /> Output
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full" style={{ background: REJECT_COLOR }} /> Reject
-        </span>
+      <div className="mb-1 flex items-center gap-4 text-xs text-slate-600">
+        {pct ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full" style={{ background: REJECT_COLOR }} /> Reject rate (% of output)
+          </span>
+        ) : (
+          <>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full" style={{ background: OUTPUT_COLOR }} /> Output
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full" style={{ background: REJECT_COLOR }} /> Reject
+            </span>
+          </>
+        )}
+        <div className="ml-auto flex gap-0.5 rounded-md bg-slate-100 p-0.5" role="radiogroup" aria-label="Chart mode">
+          {(
+            [
+              ["pct", "%"],
+              ["qty", "Qty"],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              onClick={() => setMode(m)}
+              className={`rounded px-2.5 py-0.5 font-medium ${
+                mode === m ? "bg-surface text-(--brand) shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Output and reject per ${bucket}`}>
-        <Axes max={max} starts={data.map((d) => d.start)} bucket={bucket} format={(v) => fmt.format(Math.round(v))} />
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        role="img"
+        aria-label={pct ? `Reject rate per ${bucket}` : `Output and reject per ${bucket}`}
+      >
+        <Axes
+          max={max}
+          starts={data.map((d) => d.start)}
+          bucket={bucket}
+          format={pct ? pctFmt : (v) => fmt.format(Math.round(v))}
+        />
         {data.map((d, i) => {
           const center = PAD.left + slot * i + slot / 2;
           return (
             <g key={d.start}>
               {hover === i && <rect x={PAD.left + slot * i} y={PAD.top} width={slot} height={plotH} style={{ fill: "var(--color-slate-100)" }} />}
-              {bar(center - barW - 1, d.output, OUTPUT_COLOR)}
-              {bar(center + 1, d.reject, REJECT_COLOR)}
+              {pct ? (
+                <>
+                  {bar(center - barW / 2, rejectRate(d) ?? 0, REJECT_COLOR)}
+                  {showLabels && (rejectRate(d) ?? 0) > 0 && (
+                    <text
+                      x={center}
+                      y={Math.min(y(rejectRate(d)!), PAD.top + plotH - 1) - 3}
+                      textAnchor="middle"
+                      className="fill-slate-600 font-medium"
+                      style={{ fontSize: labelSize }}
+                    >
+                      {rejectRate(d)!.toFixed(rejectRate(d)! < 10 ? 1 : 0)}%
+                    </text>
+                  )}
+                </>
+              ) : (
+                <>
+                  {bar(center - barW - 1, d.output, OUTPUT_COLOR)}
+                  {bar(center + 1, d.reject, REJECT_COLOR)}
+                </>
+              )}
               <rect
                 x={PAD.left + slot * i}
                 y={PAD.top}
@@ -210,6 +282,7 @@ export function OutputRejectChart({
           x={PAD.left + slot * hover + slot / 2}
           lines={[
             tooltipLabel(h.start, bucket),
+            ...(pct ? [`Reject rate ${rejectRate(h) === null ? "—" : `${rejectRate(h)!.toFixed(2)}%`}`] : []),
             `Output ${withUnit(fmt.format(h.output), units.output)}`,
             `Reject ${withUnit(fmt.format(h.reject), units.reject)}`,
           ]}

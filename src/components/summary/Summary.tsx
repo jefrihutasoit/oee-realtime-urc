@@ -15,6 +15,7 @@ import { summaryApi } from "@/lib/summary-api";
 import { useProductionUnits, withUnit } from "@/lib/production-units";
 import type { DailySummary } from "@/types/summary";
 import { MACHINE_CATEGORIES, MACHINE_CATEGORY_LABELS, type MachineCategory } from "@/types/machine";
+import SkuShiftTable from "./SkuShiftTable";
 import { Donut, OeeTrendChart, OutputRejectChart } from "./SummaryCharts";
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -323,12 +324,12 @@ export default function Summary() {
           </span>
           <div className="min-w-0">
             <p className={KPI_LABEL}>Total Reject</p>
-            <p className={KPI_VALUE}>
-              {fmt.format(data.reject)}
-              {units.reject && <span className="ml-1.5 text-base font-medium text-slate-500">{units.reject}</span>}
+            <p className="text-3xl leading-tight font-bold text-red-600 tabular-nums">
+              {rejectPct.toFixed(rejectPct < 10 ? 2 : 1)}%
+              <span className="ml-1.5 text-base font-medium text-slate-500">of output</span>
             </p>
-            <p className="text-xs font-medium text-red-600">
-              {rejectPct.toFixed(1)}% of total output
+            <p className="text-xs text-slate-500 tabular-nums">
+              {withUnit(fmt.format(data.reject), units.reject)}
               <span className="ml-1 text-slate-400">
                 (tag {fmt.format(data.rejectTag)} · input {fmt.format(data.rejectInput)})
               </span>
@@ -594,6 +595,12 @@ export default function Summary() {
           </Card>
         ))}
       </div>
+
+      {/* Every SKU per machine and shift, with that SKU's own OEE */}
+      <Card>
+        <Title sub="Each SKU a machine ran in a shift, with its own figures">SKU per Shift</Title>
+        <SkuShiftTable rows={data.skuRuns} showDate={!single} unitsOf={unitsOf} />
+      </Card>
     </div>
   );
 }

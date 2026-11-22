@@ -24,6 +24,8 @@ export default function SkuFormModal({ sku, onClose, onSubmit }: SkuFormModalPro
   const [productName, setProductName] = useState(sku?.productName ?? "");
   const [skuText, setSkuText] = useState(sku?.sku ?? "");
   const [outputPerMinute, setOutputPerMinute] = useState(sku ? String(sku.outputPerMinute) : "");
+  /** Target weight for the scale monitoring; empty = not set. */
+  const [targetWeight, setTargetWeight] = useState(sku?.targetWeight != null ? String(sku.targetWeight) : "");
   /** Existing backend path, a new data URL, or null. */
   const [photo, setPhoto] = useState<string | null>(sku?.photo ?? null);
   const [saving, setSaving] = useState(false);
@@ -54,6 +56,8 @@ export default function SkuFormModal({ sku, onClose, onSubmit }: SkuFormModalPro
     }
     if (skuIdInvalid) return setError("SKU ID may only contain letters and numbers");
     if (!Number.isFinite(rate) || rate <= 0) return setError("Output per minute must be greater than 0");
+    const weight = targetWeight.trim() === "" ? null : Number(targetWeight);
+    if (weight !== null && (!Number.isFinite(weight) || weight < 0)) return setError("Weight must be a number of 0 or more");
 
     setSaving(true);
     setError(null);
@@ -63,6 +67,7 @@ export default function SkuFormModal({ sku, onClose, onSubmit }: SkuFormModalPro
         productName,
         sku: skuText,
         outputPerMinute: rate,
+        targetWeight: weight,
         // Only send the photo when it changed; omitting it keeps the stored file.
         ...(photo !== (sku?.photo ?? null) && { photo }),
       });
@@ -187,6 +192,26 @@ export default function SkuFormModal({ sku, onClose, onSubmit }: SkuFormModalPro
             maxLength={100}
             className={inputCls}
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="targetWeight" className="block text-sm font-medium text-slate-700">
+            Weight
+          </label>
+          <input
+            id="targetWeight"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={targetWeight}
+            onChange={(e) => setTargetWeight(e.target.value)}
+            placeholder="e.g. 60"
+            className={inputCls}
+          />
+          <p className="text-xs text-slate-500">
+            Target weight of one pack, in the unit of the scale (e.g. g). Optional; the target line in Scale Monitoring.
+          </p>
         </div>
       </form>
     </Modal>

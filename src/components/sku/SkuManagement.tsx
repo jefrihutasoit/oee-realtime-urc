@@ -115,20 +115,21 @@ export default function SkuManagement() {
               <th className="px-4 py-2.5 font-medium">Product Name</th>
               <th className="px-4 py-2.5 font-medium">SKU</th>
               <th className="px-4 py-2.5 text-right font-medium">Output / min (packs)</th>
+              <th className="px-4 py-2.5 text-right font-medium">Weight</th>
               <th className="px-4 py-2.5 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                   <Loader2 size={20} className="mx-auto mb-2 animate-spin" />
                   Loading SKUs…
                 </td>
               </tr>
             ) : loadError ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-red-600">
+                <td colSpan={7} className="px-4 py-10 text-center text-red-600">
                   {loadError}
                   <button
                     type="button"
@@ -144,7 +145,7 @@ export default function SkuManagement() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                   {skus.length === 0 ? "No SKU registered yet." : "No SKU matches your search."}
                 </td>
               </tr>
@@ -167,6 +168,9 @@ export default function SkuManagement() {
                     <td className="px-4 py-2 text-slate-700">{s.productName}</td>
                     <td className="px-4 py-2 text-slate-600">{s.sku}</td>
                     <td className="px-4 py-2 text-right text-slate-700 tabular-nums">{rateFmt.format(s.outputPerMinute)}</td>
+                    <td className="px-4 py-2 text-right text-slate-700 tabular-nums">
+                      {s.targetWeight === null ? <span className="text-slate-400">—</span> : rateFmt.format(s.targetWeight)}
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex justify-end gap-1">
                         <button
