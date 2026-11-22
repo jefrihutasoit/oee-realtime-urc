@@ -24,9 +24,14 @@ export interface ChartSeries {
 /** Identity of a series inside one chart. */
 const sid = (s: ChartSeries) => s.id ?? s.signal.key;
 
-/** Weight specification over a stretch of time, drawn on the first axis (Scale Monitoring). */
-export type { SpecBand } from "@/types/scale";
-import type { SpecBand } from "@/types/scale";
+/** Target and limits over a stretch of time, drawn on the first axis. */
+export interface SpecBand {
+  from: number;
+  to: number;
+  target: number | null;
+  low: number | null;
+  high: number | null;
+}
 
 export interface ChartAxis {
   /** Shown above the axis, e.g. the unit. */

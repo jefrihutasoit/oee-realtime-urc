@@ -47,7 +47,14 @@ export const navigation: NavItem[] = [
     icon: Timer,
     children: [{ label: "Upload", href: "/downtime/upload" }],
   },
-  { label: "Reports", icon: FileText, href: "/reports" },
+  {
+    label: "Reports",
+    icon: FileText,
+    children: [
+      { label: "Production", href: "/reports" },
+      { label: "Trace Downtime", href: "/reports/trace-downtime" },
+    ],
+  },
   {
     label: "Historical",
     icon: ChartLine,

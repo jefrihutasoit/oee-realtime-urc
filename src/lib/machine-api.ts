@@ -24,15 +24,11 @@ export const machineApi = {
   shiftSkus: (id: string) =>
     apiRequest<ShiftSkus>(`/machines/${encodeURIComponent(id)}/shift-skus`),
   /** Signals and status from `from` to `to` (epoch ms). */
-  /**
-   * One weight signal with its low / high limit tags and the SKUs run (Scale Monitoring). Empty keys use the
-   * defaults (the scale's average weight and limit fields); "none" turns a limit off.
-   */
-  scaleMonitor: (id: string, from: number, to: number, keys: { signal?: string; low?: string; high?: string } = {}) => {
-    const q = new URLSearchParams({ from: new Date(from).toISOString(), to: new Date(to).toISOString() });
-    for (const [k, v] of Object.entries(keys)) if (v) q.set(k, v);
-    return apiRequest<ScaleMonitor>(`/machines/${encodeURIComponent(id)}/scale-monitor?${q}`);
-  },
+  /** The recorded fields of the machine's weight scale and the SKUs run (Scale Monitoring). */
+  scaleMonitor: (id: string, from: number, to: number) =>
+    apiRequest<ScaleMonitor>(
+      `/machines/${encodeURIComponent(id)}/scale-monitor?from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`
+    ),
   trend: (id: string, from: number, to: number) =>
     apiRequest<MachineTrend>(
       `/machines/${encodeURIComponent(id)}/trend?from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`

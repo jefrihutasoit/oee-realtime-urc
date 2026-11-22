@@ -64,9 +64,9 @@ const machineText = (m: Pick<MachineRegistration, "machineNo" | "machineName">) 
   `${m.machineNo}${m.machineName ? ` · ${m.machineName}` : ""}`;
 
 /** Checked signal keys per machine, in the URL: `id1~key.key;id2~key` (parts URI-encoded). */
-type Picks = Record<string, string[]>;
+export type Picks = Record<string, string[]>;
 const enc = encodeURIComponent;
-function parsePicks(text: string | null): Picks {
+export function parsePicks(text: string | null): Picks {
   const out: Picks = {};
   for (const part of (text ?? "").split(";")) {
     const [id, keys] = part.split("~");
@@ -74,7 +74,7 @@ function parsePicks(text: string | null): Picks {
   }
   return out;
 }
-const writePicks = (p: Picks) =>
+export const writePicks = (p: Picks) =>
   Object.entries(p)
     .map(([id, keys]) => `${enc(id)}~${keys.map(enc).join(".")}`)
     .join(";");
@@ -114,7 +114,7 @@ function StatusLegend() {
 }
 
 /** Dropdown with a checkbox per signal of one machine. */
-function SignalMenu({
+export function SignalMenu({
   signals,
   checked,
   colorOf,

@@ -1,5 +1,5 @@
 import type { DowntimeUploadRow } from "@/types/downtime";
-import { parseDate, text, type Cell } from "./reject-sheet";
+import { listSheets, parseDate, text, type Cell } from "./reject-sheet";
 
 /**
  * Reads the downtime sheet:
@@ -128,3 +128,6 @@ export async function parseDowntimeSheet(file: File, sheetName?: string): Promis
 
   return { sheetName: name, sheetNames: wb.SheetNames, rows };
 }
+
+/** Sheets of the workbook; `looksLikeReject` marks those with the downtime layout ("Machine Packaging" header). */
+export const listDowntimeSheets = (file: File) => listSheets(file, (c) => key(c).includes("MACHINE"));

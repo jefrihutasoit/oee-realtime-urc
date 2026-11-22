@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Box, CircleX, Download, Loader2, RotateCcw, Search } from "lucide-react";
+import { Box, Check, CircleX, Download, Loader2, RotateCcw } from "lucide-react";
 import DateRangeInput from "@/components/ui/DateRangeInput";
 import MultiSelect from "@/components/ui/MultiSelect";
 import { OEE_TARGET } from "@/config/oee";
@@ -382,7 +382,7 @@ export default function Historical() {
               disabled={loading}
               className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-(--brand) px-6 text-sm font-medium text-white hover:bg-(--brand-hover) disabled:opacity-60"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
               Apply
             </button>
             <button

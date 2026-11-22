@@ -29,6 +29,8 @@ function samplePayload(m: MachineRegistration, latest: Map<string, string>, defa
   put(m.tagOutput, "0");
   put(m.tagReject, "0");
   put(m.tagProduct, defaultSku);
+  // Optional speed tag (per minute), compared with the SKU's output per minute.
+  if (m.tagSpeed) put(m.tagSpeed, "0");
   // Adaptive machines take the unit from the tag name ("Temp Limit,C").
   m.monitoringTags.forEach((t) => {
     const value = jsonValue(latest.get(t.tagName) ?? "0");

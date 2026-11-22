@@ -84,6 +84,31 @@ function labelValue(row: Cell[], labelPattern: RegExp): Cell | undefined {
   return undefined;
 }
 
+/**
+ * Sheets of a workbook with their size, to choose the one to extract. `isHeader` recognises a header cell of the
+ * expected layout (default: the reject sheet's "MC").
+ */
+export async function listSheets(
+  file: File,
+  isHeader: (cell: Cell) => boolean = (c) => label(c) === "MC"
+): Promise<{ name: string; rows: number; columns: number; looksLikeReject: boolean }[]> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(await file.arrayBuffer());
+  return wb.SheetNames.map((name) => {
+    const ws = wb.Sheets[name];
+    if (!ws?.["!ref"]) return { name, rows: 0, columns: 0, looksLikeReject: false };
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const grid = XLSX.utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: null });
+    return {
+      name,
+      rows: range.e.r - range.s.r + 1,
+      columns: range.e.c - range.s.c + 1,
+      // The expected layout has its header cell somewhere in the sheet.
+      looksLikeReject: grid.some((row) => row.some(isHeader)),
+    };
+  });
+}
+
 export async function parseRejectSheet(file: File, sheetName?: string): Promise<ParsedRejectSheet> {
   const XLSX = await import("xlsx");
   const wb = XLSX.read(await file.arrayBuffer());
